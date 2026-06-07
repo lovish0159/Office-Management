@@ -27,8 +27,9 @@ st.markdown(hide_and_secure_css, unsafe_allow_html=True)
 
 # --- CREDENTIALS & LOGIN SETUP ---
 # Update your secure credentials here
-ADMIN_USER = "admin"
-ADMIN_PASS = "civil@123"
+# Ab code seedha Streamlit ke secure vault se credentials uthayega
+ADMIN_USER = st.secrets["ADMIN_USERNAME"]
+ADMIN_PASS = st.secrets["ADMIN_PASSWORD"]
 
 # Google Sheet URL (Aapki actual sheet ka link)
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1FpDrz63M5Ix_rphXoonZHCDy_PAOUjsrzYIC3AFkUzo/edit?gid=0#gid=0"
