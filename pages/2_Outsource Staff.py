@@ -8,10 +8,7 @@ from datetime import datetime
 # 1. ENTERPRISE CONFIGURATION
 # ==========================================
 # Apna Google Sheet URL yahan dalein
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1FpDrz63M5Ix_rphXoonZHCDy_PAOUjsrzYIC3AFkUzo/edit?gid=1953208189#gid=1953208189"
-
-# Google Sheet mein Outsource Staff wale Tab/Sheet ka exact naam yahan likhein
-OUTSOURCE_SHEET_NAME = "Outsource Staff"
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1FpDrz63M5Ix_rphXoonZHCDy_PAOUjsrzYIC3AFkUzo/edit?gid=0#gid=0"
 
 st.set_page_config(page_title="Outsourced Staff Roster | CH Bathinda", page_icon="📝", layout="wide")
 
@@ -55,7 +52,7 @@ def authenticate(user, pwd):
         return False
 
 # ==========================================
-# 3. CLOUD DATABASE CONTROLLER
+# 3. CLOUD DATABASE CONTROLLER (WORKSHEET 2)
 # ==========================================
 @st.cache_data(ttl=300)
 def fetch_outsource_data():
@@ -63,15 +60,22 @@ def fetch_outsource_data():
     try:
         creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
         client = gspread.authorize(creds)
-        # Specifically fetching the Outsource Staff sheet by its name
-        worksheet = client.open_by_url(SHEET_URL).worksheet(OUTSOURCE_SHEET_NAME)
+        
+        spreadsheet = client.open_by_url(SHEET_URL)
+        
+        # 🎯 STRICT TARGET: 2nd Worksheet (Index 1)
+        # Python mein counting 0 se shuru hoti hai (0 = Pehli sheet, 1 = Dusri sheet)
+        worksheet = spreadsheet.get_worksheet(1) 
+        
+        if worksheet is None:
+            st.error("⚠️ Error: 2nd Worksheet nahi mili. Check karein ki Google Sheet mein 2 tabs hain.")
+            return pd.DataFrame()
+            
         records = worksheet.get_all_records()
         return pd.DataFrame(records)
-    except gspread.exceptions.WorksheetNotFound:
-        st.error(f"⚠️ Error: Google Sheet mein '{OUTSOURCE_SHEET_NAME}' naam ka tab nahi mila.")
-        return pd.DataFrame()
+        
     except Exception as e:
-        st.error("⚠️ Database Connectivity Interrupted. Please check Service Account permissions.")
+        st.error(f"⚠️ Database Connectivity Interrupted. Error: {e}")
         return pd.DataFrame()
 
 # ==========================================
