@@ -62,17 +62,25 @@ def fetch_outsource_data():
         client = gspread.authorize(creds)
         
         spreadsheet = client.open_by_url(SHEET_URL)
-        
-        # 🎯 STRICT TARGET: 2nd Worksheet (Index 1)
-        # Python mein counting 0 se shuru hoti hai (0 = Pehli sheet, 1 = Dusri sheet)
         worksheet = spreadsheet.get_worksheet(1) 
         
         if worksheet is None:
             st.error("⚠️ Error: 2nd Worksheet nahi mili. Check karein ki Google Sheet mein 2 tabs hain.")
             return pd.DataFrame()
             
-        records = worksheet.get_all_records()
-        return pd.DataFrame(records)
+        # 🎯 SMART FIX: get_all_records() ki jagah get_all_values() ka use taaki empty headers error na dein
+        data = worksheet.get_all_values()
+        
+        if not data: # Agar sheet poori khaali hai
+            return pd.DataFrame()
+            
+        headers = data[0]
+        df = pd.DataFrame(data[1:], columns=headers)
+        
+        # 🎯 Khaali (blank) column headers ko automatic ignore karna
+        df = df.loc[:, df.columns != '']
+        
+        return df
         
     except Exception as e:
         st.error(f"⚠️ Database Connectivity Interrupted. Error: {e}")
