@@ -2,241 +2,256 @@ import streamlit as st
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from typing import Optional, Tuple
+from datetime import datetime
 
 # ==========================================
-# 1. APP CONFIGURATION & CONSTANTS
+# 1. ENTERPRISE CONFIGURATION
 # ==========================================
-class Config:
-    PAGE_TITLE = "Civil Hospital Bathinda | Portal"
-    PAGE_ICON = "🏥"
-    SHEET_URL = "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit" # Apna URL yahan dalein
-    CACHE_TTL = 300 # Data refresh interval in seconds
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1FpDrz63M5Ix_rphXoonZHCDy_PAOUjsrzYIC3AFkUzo/edit?gid=0#gid=0"
 
-st.set_page_config(page_title=Config.PAGE_TITLE, page_icon=Config.PAGE_ICON, layout="wide")
+st.set_page_config(page_title="Secure Roster | CH Bathinda", page_icon="🏥", layout="wide")
 
 # ==========================================
-# 2. SECURITY & AUTHENTICATION MODULE
+# 2. SECURITY, AUTHENTICATION & RESPONSIVE UI
 # ==========================================
-class SecurityManager:
-    @staticmethod
-    def apply_strict_ui_policies():
-        """Injects CSS to disable copying, text selection, and downloading."""
-        css = """
-        <style>
-            #MainMenu, footer, header {visibility: hidden;}
-            body, .block-container, dataframe, table, div, th, td, tr {
-                user-select: none !important;
-                -webkit-user-select: none !important;
-                -ms-user-select: none !important;
-                -moz-user-select: none !important;
-            }
-            .corporate-table {
-                width: 100%; border-collapse: collapse; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                box-shadow: 0 4px 8px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden;
-            }
-            .corporate-table th { background-color: #2c3e50; color: white; padding: 12px; text-align: left; }
-            .corporate-table td { padding: 12px; border-bottom: 1px solid #ecf0f1; background-color: #ffffff; color: #333; }
-            .corporate-table tr:hover td { background-color: #f5f6fa; }
-        </style>
-        """
-        st.markdown(css, unsafe_allow_html=True)
+def enforce_anti_leak_ui():
+    css_shield = """
+    <style>
+        #MainMenu, footer, header {visibility: hidden;}
+        body, .block-container, table, div, th, td, tr, span, p {
+            user-select: none !important;
+            -webkit-user-select: none !important;
+            -ms-user-select: none !important;
+            -moz-user-select: none !important;
+        }
+        
+        .enterprise-table {
+            width: 100%; border-collapse: collapse; font-family: sans-serif;
+            background-color: #ffffff; box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border-radius: 8px; overflow: hidden; margin-top: 10px;
+        }
+        .enterprise-table th { background-color: #1e293b; color: white; padding: 16px; text-align: left; white-space: nowrap; }
+        .enterprise-table td { padding: 14px 16px; border-bottom: 1px solid #e2e8f0; color: #334155; white-space: nowrap; }
+        
+        div.row-widget.stRadio > div { 
+            flex-direction: row; 
+            flex-wrap: wrap; 
+            gap: 8px; 
+            background-color: #f1f5f9; 
+            padding: 10px; 
+            border-radius: 8px; 
+            justify-content: center;
+        }
+        div.row-widget.stRadio > div > label { 
+            background-color: #ffffff; 
+            padding: 8px 14px; 
+            border-radius: 6px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
+            cursor: pointer;
+            margin: 0;
+            font-size: 14px;
+        }
+        
+        @media (max-width: 768px) {
+            .block-container { padding-top: 1rem; padding-left: 1rem; padding-right: 1rem; }
+            h2 { font-size: 1.5rem !important; text-align: center; }
+            div.row-widget.stRadio > div > label { padding: 6px 10px; font-size: 12px; flex: 1 1 auto; text-align: center; }
+            .enterprise-table th, .enterprise-table td { padding: 10px 12px; font-size: 13px; }
+        }
+    </style>
+    """
+    st.markdown(css_shield, unsafe_allow_html=True)
 
-    @staticmethod
-    def init_session():
-        """Initializes secure session state variables."""
-        if "is_authenticated" not in st.session_state:
-            st.session_state.is_authenticated = False
+def initialize_session():
+    if "is_verified" not in st.session_state:
+        st.session_state.is_verified = False
 
-    @staticmethod
-    def login(username, password) -> bool:
-        """Validates credentials against secure secrets."""
-        try:
-            valid_user = st.secrets["ADMIN_USERNAME"]
-            valid_pass = st.secrets["ADMIN_PASSWORD"]
-            if username == valid_user and password == valid_pass:
-                st.session_state.is_authenticated = True
-                return True
-            return False
-        except KeyError:
-            st.error("⚠️ Server Configuration Error: Missing Secrets.")
-            return False
+def authenticate(user, pwd):
+    try:
+        if user == st.secrets["ADMIN_USERNAME"] and pwd == st.secrets["ADMIN_PASSWORD"]:
+            st.session_state.is_verified = True
+            return True
+        return False
+    except Exception:
+        st.error("⚠️ System Error: Authentication secrets are missing.")
+        return False
 
-    @staticmethod
-    def logout():
-        st.session_state.is_authenticated = False
-        st.rerun()
+def terminate_session():
+    st.session_state.is_verified = False
+    st.rerun()
 
 # ==========================================
-# 3. DATABASE MANAGEMENT MODULE
+# 3. CLOUD DATABASE CONTROLLER
 # ==========================================
-class DatabaseManager:
-    @staticmethod
-    @st.cache_resource
-    def _get_client() -> Optional[gspread.Client]:
-        """Establishes a secure connection to Google Cloud via Service Account."""
-        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        try:
-            creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
-            return gspread.authorize(creds)
-        except Exception as e:
-            st.error(f"⚠️ Database Connection Failed: {e}")
-            return None
+def get_gspread_client():
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
+    return gspread.authorize(creds)
 
-    @classmethod
-    def get_sheet(cls) -> Optional[gspread.Worksheet]:
-        """Fetches the active worksheet."""
-        client = cls._get_client()
-        if client:
-            try:
-                return client.open_by_url(Config.SHEET_URL).sheet1
-            except Exception:
-                st.error("⚠️ Failed to locate the specific Google Sheet. Check URL.")
-        return None
-
-    @classmethod
-    @st.cache_data(ttl=Config.CACHE_TTL)
-    def fetch_records(_cls) -> pd.DataFrame:
-        """Fetches and caches records into a Pandas DataFrame."""
-        sheet = _cls.get_sheet()
-        if sheet:
-            records = sheet.get_all_records()
-            return pd.DataFrame(records)
+@st.cache_data(ttl=300)
+def fetch_roster_data(sheet_index):
+    try:
+        client = get_gspread_client()
+        worksheet = client.open_by_url(SHEET_URL).get_worksheet(sheet_index)
+        if worksheet is not None:
+            # 🎯 EXPERT FIX: Prevent Duplicate/Empty Header Crashes
+            data = worksheet.get_all_values()
+            if not data:
+                return pd.DataFrame()
+                
+            df = pd.DataFrame(data[1:], columns=data[0])
+            # Drop purely empty columns created by stray spaces in Google Sheets
+            df = df.loc[:, (df.columns != '') & (~df.columns.isna())]
+            return df
+            
+        return pd.DataFrame()
+    except Exception as e:
+        st.error(f"⚠️ Data Sync Error: {e}")
         return pd.DataFrame()
 
-    @classmethod
-    def update_posting(cls, emp_name: str, new_posting: str) -> Tuple[bool, str]:
-        """Updates a specific employee's posting securely."""
-        sheet = cls.get_sheet()
-        if not sheet: return False, "Database disconnected."
+def update_employee_posting(sheet_index, emp_name, new_posting):
+    try:
+        client = get_gspread_client()
+        worksheet = client.open_by_url(SHEET_URL).get_worksheet(sheet_index)
+        cell = worksheet.find(emp_name)
         
-        try:
-            cell = sheet.find(emp_name)
-            if not cell: return False, "Employee not found in database."
-            
-            headers = sheet.row_values(1)
-            if "Place of Posting" not in headers:
-                return False, "'Place of Posting' column missing in database architecture."
-            
+        headers = worksheet.row_values(1)
+        if "Place of Posting" in headers:
             col_idx = headers.index("Place of Posting") + 1
-            sheet.update_cell(cell.row, col_idx, new_posting)
-            st.cache_data.clear() # Clear cache to show live updates immediately
+            worksheet.update_cell(cell.row, col_idx, new_posting)
+            st.cache_data.clear()
             return True, "Success"
-        except Exception as e:
-            return False, str(e)
+        else:
+            return False, "'Place of Posting' column not found."
+    except Exception as e:
+        return False, str(e)
 
 # ==========================================
 # 4. USER INTERFACE (UI) COMPONENTS
 # ==========================================
-def render_sidebar() -> str:
-    """Renders the modular sidebar and returns the selected route."""
-    st.sidebar.markdown("<h2 style='text-align: center; color: #34495e;'>🏥 CH Bathinda</h2>", unsafe_allow_html=True)
-    st.sidebar.caption("Enterprise Resource Portal")
-    st.sidebar.divider()
-    
-    route = st.sidebar.radio("📌 Navigation Menu", ["🏠 Dashboard", "📋 Staff Roster", "🔐 Admin Console"])
-    
-    if st.session_state.is_authenticated:
-        st.sidebar.divider()
-        st.sidebar.success("🟢 Admin Status: Online")
-        if st.sidebar.button("🔒 Terminate Session", use_container_width=True):
-            SecurityManager.logout()
-            
-    return route
-
-def render_dashboard():
-    st.markdown("<br><br>", unsafe_allow_html=True)
-    st.markdown("<h1 style='text-align: center; color: #2c3e50; font-size: 3.5rem;'>Civil Hospital Bathinda</h1>", unsafe_allow_html=True)
-    st.markdown("<h3 style='text-align: center; color: #7f8c8d; font-weight: 300;'>Central Office & Establishment Matrix</h3>", unsafe_allow_html=True)
-    st.markdown("<hr style='width: 40%; margin: auto; border-top: 2px solid #ecf0f1;'>", unsafe_allow_html=True)
-    
+def render_auth_gateway():
+    st.markdown("<br>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.info("💡 **Navigation System:** Use the sidebar panel to access the Staff Roster or the Secure Admin Console.")
+        st.markdown("<h2 style='text-align: center; color: #1e293b;'>🔐 Restricted Access</h2>", unsafe_allow_html=True)
+        with st.form("security_clearance_form"):
+            username = st.text_input("Administrator ID").strip()
+            password = st.text_input("Security Clearance Key", type="password").strip()
+            if st.form_submit_button("Authenticate & Initialize 🚀", use_container_width=True):
+                if authenticate(username, password):
+                    st.success("✅ Identity verified. Handshake successful.")
+                    st.rerun()
+                else:
+                    st.error("❌ Authentication Failed: Invalid credentials.")
 
-def render_staff_roster():
-    st.header("📋 Staff Posting Roster")
-    st.caption("Read-Only Secure Ledger | Data Extraction is Prohibited")
+def render_roster_dashboard(title, sheet_index):
+    st.markdown(f"### {title}")
+    st.caption(f"Secure Environment | Time: {datetime.now().strftime('%d-%m-%Y %H:%M')}")
     st.divider()
 
-    if not st.session_state.is_authenticated:
-        st.warning("🔒 Access Restricted. Authorized personnel must authenticate via the Admin Console to view records.")
+    with st.spinner("Decrypting data matrices..."):
+        df = fetch_roster_data(sheet_index)
+
+    if df.empty:
+        st.warning("⚠️ Database schema is empty or connection is offline.")
         return
 
-    with st.spinner("Synchronizing with Cloud Database..."):
-        df = DatabaseManager.fetch_records()
-
-    if not df.empty:
-        # Display Quick Metrics
-        col1, col2 = st.columns(2)
-        col1.metric("Total Active Staff", len(df))
+    st.markdown("#### ⚙️ Filter Records")
+    f_col1, f_col2 = st.columns(2)
+    processed_df = df.copy()
+    
+    with f_col1:
         if 'Designation' in df.columns:
-            col2.metric("Unique Designations", df['Designation'].nunique())
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        # Render Secure Custom HTML Table
-        html_table = df.to_html(index=False, classes="corporate-table", border=0)
-        st.markdown(f"<div style='width: 100%; overflow-x: auto;'>{html_table}</div>", unsafe_allow_html=True)
-    else:
-        st.info("📭 Database is currently empty or awaiting synchronization.")
+            desig_options = ["All Designations"] + sorted(df['Designation'].dropna().unique().tolist())
+            selected_desig = st.selectbox("By Designation:", desig_options, key=f"desig_{sheet_index}")
+            if selected_desig != "All Designations":
+                processed_df = processed_df[processed_df['Designation'] == selected_desig]
+                
+    with f_col2:
+        if 'Place of Posting' in df.columns:
+            posting_options = ["All Workstations"] + sorted(df['Place of Posting'].dropna().unique().tolist())
+            selected_posting = st.selectbox("By Location:", posting_options, key=f"post_{sheet_index}")
+            if selected_posting != "All Workstations":
+                processed_df = processed_df[processed_df['Place of Posting'] == selected_posting]
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.metric("Total Personnel Located", len(processed_df))
+
+    html_grid = processed_df.to_html(index=False, classes="enterprise-table", border=0)
+    st.markdown(f"<div style='width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch;'>{html_grid}</div>", unsafe_allow_html=True)
 
 def render_admin_console():
-    st.header("🔐 Admin Operations Console")
-    st.caption("Secure Environment for Establishment Adjustments")
+    st.markdown("### 🔐 Admin Operations Console")
+    st.caption("Central Portal for Station Updates")
     st.divider()
-
-    if not st.session_state.is_authenticated:
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            st.info("Please provide administrative credentials to proceed.")
-            with st.form("auth_form"):
-                user = st.text_input("Administrator ID")
-                pwd = st.text_input("Security Key", type="password")
-                if st.form_submit_button("Initiate Secure Handshake 🚀", use_container_width=True):
-                    if SecurityManager.login(user, pwd):
-                        st.rerun()
-                    else:
-                        st.error("❌ Authentication Failed. Unauthorized access attempt logged.")
+    
+    st.markdown("#### 🔄 Station Allocation Manager")
+    staff_category = st.radio("Select Staff Category:", ["Regular Staff", "Contractual Staff"], horizontal=True)
+    
+    sheet_idx = 0 if staff_category == "Regular Staff" else 1
+    df = fetch_roster_data(sheet_idx)
+    
+    if not df.empty and 'Employee Name' in df.columns:
+        with st.form("roster_update_form"):
+            employees = sorted(df['Employee Name'].dropna().unique().tolist())
+            selected_emp = st.selectbox("Target Personnel:", ["-- Select ID --"] + employees)
+            new_station = st.text_input("New Allocation / Duty Station:")
+            
+            if st.form_submit_button("Deploy Changes to Cloud ☁️", use_container_width=True):
+                if selected_emp == "-- Select ID --" or not new_station:
+                    st.warning("⚠️ Invalid input parameters. Please complete all fields.")
+                else:
+                    with st.spinner(f"Updating {staff_category}..."):
+                        success, msg = update_employee_posting(sheet_idx, selected_emp, new_station)
+                        if success:
+                            st.success(f"✅ Protocol complete: **{selected_emp}** relocated to **{new_station}**.")
+                        else:
+                            st.error(f"❌ Transaction Failed: {msg}")
     else:
-        df = DatabaseManager.fetch_records()
-        if not df.empty and 'Employee Name' in df.columns:
-            with st.form("roster_update_form"):
-                st.markdown("### 🔄 Station Allocation Manager")
-                
-                employees = df['Employee Name'].dropna().tolist()
-                selected_emp = st.selectbox("Target Personnel:", ["-- Select ID --"] + employees)
-                new_station = st.text_input("New Allocation / Duty Station:")
-                
-                if st.form_submit_button("Deploy Changes to Cloud ☁️"):
-                    if selected_emp == "-- Select ID --" or not new_station:
-                        st.warning("⚠️ Invalid input parameters. Please complete all fields.")
-                    else:
-                        with st.spinner("Processing transaction..."):
-                            success, msg = DatabaseManager.update_posting(selected_emp, new_station)
-                            if success:
-                                st.toast(f"Database synced successfully!", icon="✅")
-                                st.success(f"✅ Protocol complete: **{selected_emp}** relocated to **{new_station}**.")
-                                st.rerun()
-                            else:
-                                st.error(f"❌ Transaction Failed: {msg}")
-        else:
-            st.error("⚠️ Database schema invalid. 'Employee Name' column is mandatory.")
+        st.warning(f"⚠️ Cannot load names for {staff_category}.")
 
 # ==========================================
-# 5. MAIN APPLICATION CONTROLLER
+# 5. APPLICATION CORE EXECUTION
 # ==========================================
-def main():
-    SecurityManager.init_session()
-    SecurityManager.apply_strict_ui_policies()
+enforce_anti_leak_ui()
+initialize_session()
+
+if not st.session_state.is_verified:
+    render_auth_gateway()
+else:
+    head_col1, head_col2 = st.columns([3, 1])
+    with head_col1:
+        st.markdown("<h2 style='margin-top: 0; padding-top: 0;'>🏥 CH Bathinda</h2>", unsafe_allow_html=True)
+    with head_col2:
+        if st.button("🔒 Logout", type="primary", use_container_width=True):
+            terminate_session()
+            
+    app_page = st.radio(
+        "Navigation",
+        [
+            "📋 Regular", "📝 Contract", "🤝 Outsource", "🔗 Deputation",
+            "🏥 Reg Detail", "🏢 Out Detail", "🔐 Update", "⚙️ Log"
+        ],
+        horizontal=True,
+        label_visibility="collapsed"
+    )
     
-    current_route = render_sidebar()
-    
-    if current_route == "🏠 Dashboard":
-        render_dashboard()
-    elif current_route == "📋 Staff Roster":
-        render_staff_roster()
-    elif current_route == "🔐 Admin Console":
+    st.markdown("<hr style='margin-top: 0.5rem; margin-bottom: 1.5rem;'>", unsafe_allow_html=True)
+
+    if app_page == "📋 Regular":
+        render_roster_dashboard("📋 Regular Staff", sheet_index=0)
+    elif app_page == "📝 Contract":
+        render_roster_dashboard("📝 Contractual Staff", sheet_index=1)
+    elif app_page == "🤝 Outsource":
+        render_roster_dashboard("🤝 Outsource Staff", sheet_index=2)
+    elif app_page == "🔗 Deputation":
+        render_roster_dashboard("🔗 Deputation Staff", sheet_index=3)
+    elif app_page == "🏥 Reg Detail":
+        render_roster_dashboard("🏥 Regular Detail", sheet_index=4)
+    elif app_page == "🏢 Out Detail":
+        render_roster_dashboard("🏢 Outsource Detail", sheet_index=5)
+    elif app_page == "🔐 Update":
         render_admin_console()
-
-if __name__ == "__main__":
-    main()
+    elif app_page == "⚙️ Log":
+        st.markdown("### ⚙️ System Status")
+        st.info("All systems operational. Network latency: Minimal. Security protocol active.")
