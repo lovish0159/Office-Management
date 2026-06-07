@@ -93,13 +93,22 @@ def fetch_roster_data(sheet_index):
     try:
         client = get_gspread_client()
         worksheet = client.open_by_url(SHEET_URL).get_worksheet(sheet_index)
+        
         if worksheet is not None:
             data = worksheet.get_all_values()
-            if not data:
+            
+            # Agar sheet bilkul khaali hai
+            if not data or len(data) < 2:
                 return pd.DataFrame()
-                
-            df = pd.DataFrame(data[1:], columns=data[0])
-            df = df.loc[:, (df.columns != '') & (~df.columns.isna())]
+            
+            # 🎯 EXPERT FIX: Prevent Duplicate Columns Crash completely
+            # Headers ke extra spaces hata rahe hain aur khali headers ko "Unnamed" bana rahe hain
+            raw_headers = [str(h).strip() if str(h).strip() != "" else f"Unnamed_{i}" for i, h in enumerate(data[0])]
+            
+            df = pd.DataFrame(data[1:], columns=raw_headers)
+            
+            # Unnamed (Khaali columns) ko securely delete karna
+            df = df.loc[:, ~df.columns.str.startswith('Unnamed_')]
             return df
             
         return pd.DataFrame()
@@ -111,16 +120,21 @@ def update_employee_posting(sheet_index, emp_name, new_posting):
     try:
         client = get_gspread_client()
         worksheet = client.open_by_url(SHEET_URL).get_worksheet(sheet_index)
+        
+        # Exact cell find karna
         cell = worksheet.find(emp_name)
         
-        headers = worksheet.row_values(1)
-        if "Place of Posting" in headers:
-            col_idx = headers.index("Place of Posting") + 1
+        # Headers ki spaces remove karke match karna (Case-insensitive check)
+        raw_headers = worksheet.row_values(1)
+        clean_headers = [str(h).strip().lower() for h in raw_headers]
+        
+        if "place of posting" in clean_headers:
+            col_idx = clean_headers.index("place of posting") + 1
             worksheet.update_cell(cell.row, col_idx, new_posting)
-            st.cache_data.clear()
+            st.cache_data.clear() # Data cache refresh
             return True, "Success"
         else:
-            return False, "'Place of Posting' column not found."
+            return False, "'Place of Posting' column nahi mila. Kripya sheet mein spelling check karein."
     except Exception as e:
         return False, str(e)
 
@@ -151,32 +165,36 @@ def render_roster_dashboard(title, sheet_index):
         df = fetch_roster_data(sheet_index)
 
     if df.empty:
-        st.warning("⚠️ Database schema is empty or connection is offline.")
+        st.warning("⚠️ Data nahi mila. Ya toh sheet khaali hai, ya connection error hai.")
         return
 
     st.markdown("#### 🔍 Search & Filter Records")
     
-    # --- UNIVERSAL SEARCH BAR ADDED HERE ---
-    search_term = st.text_input("🔎 Universal Search (Search by Name, Ward, or any detail):", placeholder="Type here to search...", key=f"search_{sheet_index}")
+    # Universal Search
+    search_term = st.text_input("🔎 Universal Search (Name, Ward, etc.):", placeholder="Type here to search...", key=f"search_{sheet_index}")
     
     f_col1, f_col2 = st.columns(2)
     processed_df = df.copy()
     
+    # Smart Find exact column names (ignoring spaces)
+    desig_col = next((c for c in df.columns if 'designation' in c.lower()), None)
+    post_col = next((c for c in df.columns if 'posting' in c.lower()), None)
+    
     with f_col1:
-        if 'Designation' in df.columns:
-            desig_options = ["All Designations"] + sorted(df['Designation'].dropna().unique().tolist())
+        if desig_col:
+            desig_options = ["All Designations"] + sorted(df[desig_col].astype(str).dropna().unique().tolist())
             selected_desig = st.selectbox("By Designation:", desig_options, key=f"desig_{sheet_index}")
             if selected_desig != "All Designations":
-                processed_df = processed_df[processed_df['Designation'] == selected_desig]
+                processed_df = processed_df[processed_df[desig_col] == selected_desig]
                 
     with f_col2:
-        if 'Place of Posting' in df.columns:
-            posting_options = ["All Workstations"] + sorted(df['Place of Posting'].dropna().unique().tolist())
+        if post_col:
+            posting_options = ["All Workstations"] + sorted(df[post_col].astype(str).dropna().unique().tolist())
             selected_posting = st.selectbox("By Location:", posting_options, key=f"post_{sheet_index}")
             if selected_posting != "All Workstations":
-                processed_df = processed_df[processed_df['Place of Posting'] == selected_posting]
+                processed_df = processed_df[processed_df[post_col] == selected_posting]
 
-    # --- SMART SEARCH LOGIC ---
+    # Universal Search Logic
     if search_term:
         mask = processed_df.astype(str).apply(lambda x: x.str.contains(search_term, case=False, na=False)).any(axis=1)
         processed_df = processed_df[mask]
@@ -188,7 +206,7 @@ def render_roster_dashboard(title, sheet_index):
         html_grid = processed_df.to_html(index=False, classes="enterprise-table", border=0)
         st.markdown(f"<div style='width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch;'>{html_grid}</div>", unsafe_allow_html=True)
     else:
-        st.info("⚠️ Koi record match nahi hua. Kripya apna search keyword check karein.")
+        st.info("⚠️ Koi record match nahi hua.")
 
 def render_admin_console():
     st.markdown("### 🔐 Admin Operations Console")
@@ -201,9 +219,12 @@ def render_admin_console():
     sheet_idx = 0 if staff_category == "Regular Staff" else 1
     df = fetch_roster_data(sheet_idx)
     
-    if not df.empty and 'Employee Name' in df.columns:
+    # Case-insensitive column search for 'Employee Name'
+    emp_col = next((c for c in df.columns if 'employee name' in c.lower()), None)
+    
+    if not df.empty and emp_col:
         with st.form("roster_update_form"):
-            employees = sorted(df['Employee Name'].dropna().unique().tolist())
+            employees = sorted(df[emp_col].astype(str).dropna().unique().tolist())
             selected_emp = st.selectbox("Target Personnel:", ["-- Select ID --"] + employees)
             new_station = st.text_input("New Allocation / Duty Station:")
             
@@ -218,7 +239,7 @@ def render_admin_console():
                         else:
                             st.error(f"❌ Transaction Failed: {msg}")
     else:
-        st.warning(f"⚠️ Cannot load names for {staff_category}.")
+        st.warning(f"⚠️ 'Employee Name' column nahi mila {staff_category} sheet mein.")
 
 # ==========================================
 # 5. APPLICATION CORE EXECUTION
