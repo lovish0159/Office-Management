@@ -12,7 +12,7 @@ SHEET_URL = "https://docs.google.com/spreadsheets/d/1FpDrz63M5Ix_rphXoonZHCDy_PA
 st.set_page_config(page_title="Secure Roster | CH Bathinda", page_icon="🏥", layout="wide")
 
 # ==========================================
-# 2. SECURITY, AUTHENTICATION & RESPONSIVE UI
+# 2. SECURITY & RESPONSIVE UI
 # ==========================================
 def enforce_anti_leak_ui():
     css_shield = """
@@ -24,7 +24,6 @@ def enforce_anti_leak_ui():
             -ms-user-select: none !important;
             -moz-user-select: none !important;
         }
-        
         .enterprise-table {
             width: 100%; border-collapse: collapse; font-family: sans-serif;
             background-color: #ffffff; box-shadow: 0 4px 6px rgba(0,0,0,0.05);
@@ -34,22 +33,12 @@ def enforce_anti_leak_ui():
         .enterprise-table td { padding: 14px 16px; border-bottom: 1px solid #e2e8f0; color: #334155; white-space: nowrap; }
         
         div.row-widget.stRadio > div { 
-            flex-direction: row; 
-            flex-wrap: wrap; 
-            gap: 8px; 
-            background-color: #f1f5f9; 
-            padding: 10px; 
-            border-radius: 8px; 
-            justify-content: center;
+            flex-direction: row; flex-wrap: wrap; gap: 8px; 
+            background-color: #f1f5f9; padding: 10px; border-radius: 8px; justify-content: center;
         }
         div.row-widget.stRadio > div > label { 
-            background-color: #ffffff; 
-            padding: 8px 14px; 
-            border-radius: 6px; 
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
-            cursor: pointer;
-            margin: 0;
-            font-size: 14px;
+            background-color: #ffffff; padding: 8px 14px; border-radius: 6px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05); cursor: pointer; margin: 0; font-size: 14px;
         }
         
         @media (max-width: 768px) {
@@ -96,18 +85,11 @@ def fetch_roster_data(sheet_index):
         
         if worksheet is not None:
             data = worksheet.get_all_values()
-            
-            # Agar sheet bilkul khaali hai
             if not data or len(data) < 2:
                 return pd.DataFrame()
             
-            # 🎯 EXPERT FIX: Prevent Duplicate Columns Crash completely
-            # Headers ke extra spaces hata rahe hain aur khali headers ko "Unnamed" bana rahe hain
             raw_headers = [str(h).strip() if str(h).strip() != "" else f"Unnamed_{i}" for i, h in enumerate(data[0])]
-            
             df = pd.DataFrame(data[1:], columns=raw_headers)
-            
-            # Unnamed (Khaali columns) ko securely delete karna
             df = df.loc[:, ~df.columns.str.startswith('Unnamed_')]
             return df
             
@@ -120,21 +102,21 @@ def update_employee_posting(sheet_index, emp_name, new_posting):
     try:
         client = get_gspread_client()
         worksheet = client.open_by_url(SHEET_URL).get_worksheet(sheet_index)
-        
-        # Exact cell find karna
         cell = worksheet.find(emp_name)
         
-        # Headers ki spaces remove karke match karna (Case-insensitive check)
         raw_headers = worksheet.row_values(1)
         clean_headers = [str(h).strip().lower() for h in raw_headers]
         
-        if "place of posting" in clean_headers:
-            col_idx = clean_headers.index("place of posting") + 1
+        # Adaptive check for posting column
+        post_col_match = next((h for h in clean_headers if any(k in h for k in ['posting', 'station', 'location', 'ward'])), None)
+        
+        if post_col_match:
+            col_idx = clean_headers.index(post_col_match) + 1
             worksheet.update_cell(cell.row, col_idx, new_posting)
-            st.cache_data.clear() # Data cache refresh
+            st.cache_data.clear()
             return True, "Success"
         else:
-            return False, "'Place of Posting' column nahi mila. Kripya sheet mein spelling check karein."
+            return False, "'Posting' wala column nahi mila sheet mein."
     except Exception as e:
         return False, str(e)
 
@@ -151,7 +133,7 @@ def render_auth_gateway():
             password = st.text_input("Security Clearance Key", type="password").strip()
             if st.form_submit_button("Authenticate & Initialize 🚀", use_container_width=True):
                 if authenticate(username, password):
-                    st.success("✅ Identity verified. Handshake successful.")
+                    st.success("✅ Identity verified.")
                     st.rerun()
                 else:
                     st.error("❌ Authentication Failed: Invalid credentials.")
@@ -169,32 +151,29 @@ def render_roster_dashboard(title, sheet_index):
         return
 
     st.markdown("#### 🔍 Search & Filter Records")
-    
-    # Universal Search
-    search_term = st.text_input("🔎 Universal Search (Name, Ward, etc.):", placeholder="Type here to search...", key=f"search_{sheet_index}")
+    search_term = st.text_input("🔎 Universal Search (Name, Ward, etc.):", placeholder="Type here...", key=f"search_{sheet_index}")
     
     f_col1, f_col2 = st.columns(2)
     processed_df = df.copy()
     
-    # Smart Find exact column names (ignoring spaces)
-    desig_col = next((c for c in df.columns if 'designation' in c.lower()), None)
-    post_col = next((c for c in df.columns if 'posting' in c.lower()), None)
+    # Adaptive Filters (Matches 'Post', 'Designation', 'Posting Position' automatically)
+    desig_col = next((c for c in df.columns if any(k in str(c).lower() for k in ['designation', 'post', 'role'])), None)
+    post_col = next((c for c in df.columns if any(k in str(c).lower() for k in ['posting', 'location', 'station', 'ward'])), None)
     
     with f_col1:
         if desig_col:
-            desig_options = ["All Designations"] + sorted(df[desig_col].astype(str).dropna().unique().tolist())
-            selected_desig = st.selectbox("By Designation:", desig_options, key=f"desig_{sheet_index}")
-            if selected_desig != "All Designations":
+            desig_options = ["All"] + sorted(df[desig_col].astype(str).dropna().unique().tolist())
+            selected_desig = st.selectbox(f"By {desig_col}:", desig_options, key=f"desig_{sheet_index}")
+            if selected_desig != "All":
                 processed_df = processed_df[processed_df[desig_col] == selected_desig]
                 
     with f_col2:
         if post_col:
-            posting_options = ["All Workstations"] + sorted(df[post_col].astype(str).dropna().unique().tolist())
-            selected_posting = st.selectbox("By Location:", posting_options, key=f"post_{sheet_index}")
-            if selected_posting != "All Workstations":
+            posting_options = ["All"] + sorted(df[post_col].astype(str).dropna().unique().tolist())
+            selected_posting = st.selectbox(f"By {post_col}:", posting_options, key=f"post_{sheet_index}")
+            if selected_posting != "All":
                 processed_df = processed_df[processed_df[post_col] == selected_posting]
 
-    # Universal Search Logic
     if search_term:
         mask = processed_df.astype(str).apply(lambda x: x.str.contains(search_term, case=False, na=False)).any(axis=1)
         processed_df = processed_df[mask]
@@ -219,27 +198,30 @@ def render_admin_console():
     sheet_idx = 0 if staff_category == "Regular Staff" else 1
     df = fetch_roster_data(sheet_idx)
     
-    # Case-insensitive column search for 'Employee Name'
-    emp_col = next((c for c in df.columns if 'employee name' in c.lower()), None)
+    # Adaptive Name Column Finder (Finds 'Employee Name', 'Name', 'Staff Name')
+    emp_col = next((c for c in df.columns if 'name' in str(c).lower()), None)
     
-    if not df.empty and emp_col:
-        with st.form("roster_update_form"):
-            employees = sorted(df[emp_col].astype(str).dropna().unique().tolist())
-            selected_emp = st.selectbox("Target Personnel:", ["-- Select ID --"] + employees)
-            new_station = st.text_input("New Allocation / Duty Station:")
-            
-            if st.form_submit_button("Deploy Changes to Cloud ☁️", use_container_width=True):
-                if selected_emp == "-- Select ID --" or not new_station:
-                    st.warning("⚠️ Invalid input parameters. Please complete all fields.")
-                else:
-                    with st.spinner(f"Updating {staff_category}..."):
-                        success, msg = update_employee_posting(sheet_idx, selected_emp, new_station)
-                        if success:
-                            st.success(f"✅ Protocol complete: **{selected_emp}** relocated to **{new_station}**.")
-                        else:
-                            st.error(f"❌ Transaction Failed: {msg}")
+    if not df.empty:
+        if emp_col:
+            with st.form("roster_update_form"):
+                employees = sorted(df[emp_col].astype(str).dropna().unique().tolist())
+                selected_emp = st.selectbox("Target Personnel:", ["-- Select ID --"] + employees)
+                new_station = st.text_input("New Allocation / Duty Station:")
+                
+                if st.form_submit_button("Deploy Changes to Cloud ☁️", use_container_width=True):
+                    if selected_emp == "-- Select ID --" or not new_station:
+                        st.warning("⚠️ Invalid input parameters. Please complete all fields.")
+                    else:
+                        with st.spinner(f"Updating {staff_category}..."):
+                            success, msg = update_employee_posting(sheet_idx, selected_emp, new_station)
+                            if success:
+                                st.success(f"✅ Protocol complete: **{selected_emp}** relocated to **{new_station}**.")
+                            else:
+                                st.error(f"❌ Transaction Failed: {msg}")
+        else:
+            st.warning(f"⚠️ Aapki '{staff_category}' sheet mein kisi bhi column ka naam 'Name' nahi hai. Update karne ke liye Name hona zaruri hai.")
     else:
-        st.warning(f"⚠️ 'Employee Name' column nahi mila {staff_category} sheet mein.")
+        st.warning(f"⚠️ Data nahi mila {staff_category} sheet mein.")
 
 # ==========================================
 # 5. APPLICATION CORE EXECUTION
