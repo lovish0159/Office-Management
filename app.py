@@ -2,171 +2,241 @@ import streamlit as st
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-
-# --- PAGE CONFIGURATION & SECURITY ---
-st.set_page_config(page_title="Civil Hospital Bathinda", page_icon="🏥", layout="wide")
-
-# 🛡️ Anti-Copy & Anti-Download CSS Shield
-hide_and_secure_css = """
-<style>
-/* Hide Streamlit top menu and footer */
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
-header {visibility: hidden;}
-
-/* Disable text selection and copying */
-body, .block-container, dataframe, table, div {
-    user-select: none !important;
-    -webkit-user-select: none !important;
-    -ms-user-select: none !important;
-    -moz-user-select: none !important;
-}
-</style>
-"""
-st.markdown(hide_and_secure_css, unsafe_allow_html=True)
-
-# --- SECURE CREDENTIALS ---
-# Streamlit secrets se secure login fetch karna
-ADMIN_USER = st.secrets["ADMIN_USERNAME"]
-ADMIN_PASS = st.secrets["ADMIN_PASSWORD"]
-
-# Google Sheet URL (Aapki actual sheet ka link yahan dalein)
-SHEET_URL = "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit"
-
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
-
-# --- GOOGLE SHEETS CONNECTION ---
-@st.cache_resource
-def get_google_sheet():
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    try:
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
-        client = gspread.authorize(creds)
-        sheet = client.open_by_url(SHEET_URL).sheet1
-        return sheet
-    except Exception as e:
-        st.error(f"⚠️ Google Sheet Connection Error. Verify Streamlit Secrets.")
-        return None
-
-def load_data():
-    sheet = get_google_sheet()
-    if sheet:
-        records = sheet.get_all_records()
-        return pd.DataFrame(records), sheet
-    return pd.DataFrame(), None
+from typing import Optional, Tuple
 
 # ==========================================
-# 📱 LEFT SIDEBAR NAVIGATION MENU
+# 1. APP CONFIGURATION & CONSTANTS
 # ==========================================
-st.sidebar.markdown("<h2 style='text-align: center; color: #1f77b4;'>🏥 CH Bathinda</h2>", unsafe_allow_html=True)
-st.sidebar.markdown("---")
+class Config:
+    PAGE_TITLE = "Civil Hospital Bathinda | Portal"
+    PAGE_ICON = "🏥"
+    SHEET_URL = "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit" # Apna URL yahan dalein
+    CACHE_TTL = 300 # Data refresh interval in seconds
 
-# Navigation Options
-app_page = st.sidebar.radio(
-    "👉 Select Page:",
-    ["🏠 Home", "📋 Posting Position of Staff", "🔐 Admin Update Portal"]
-)
+st.set_page_config(page_title=Config.PAGE_TITLE, page_icon=Config.PAGE_ICON, layout="wide")
 
-st.sidebar.markdown("---")
+# ==========================================
+# 2. SECURITY & AUTHENTICATION MODULE
+# ==========================================
+class SecurityManager:
+    @staticmethod
+    def apply_strict_ui_policies():
+        """Injects CSS to disable copying, text selection, and downloading."""
+        css = """
+        <style>
+            #MainMenu, footer, header {visibility: hidden;}
+            body, .block-container, dataframe, table, div, th, td, tr {
+                user-select: none !important;
+                -webkit-user-select: none !important;
+                -ms-user-select: none !important;
+                -moz-user-select: none !important;
+            }
+            .corporate-table {
+                width: 100%; border-collapse: collapse; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                box-shadow: 0 4px 8px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden;
+            }
+            .corporate-table th { background-color: #2c3e50; color: white; padding: 12px; text-align: left; }
+            .corporate-table td { padding: 12px; border-bottom: 1px solid #ecf0f1; background-color: #ffffff; color: #333; }
+            .corporate-table tr:hover td { background-color: #f5f6fa; }
+        </style>
+        """
+        st.markdown(css, unsafe_allow_html=True)
 
-# Sidebar par logout button agar admin logged in hai
-if st.session_state.authenticated:
-    st.sidebar.success("👤 Admin Access Active")
-    if st.sidebar.button("🔒 Logout Securely", use_container_width=True):
-        st.session_state.authenticated = False
+    @staticmethod
+    def init_session():
+        """Initializes secure session state variables."""
+        if "is_authenticated" not in st.session_state:
+            st.session_state.is_authenticated = False
+
+    @staticmethod
+    def login(username, password) -> bool:
+        """Validates credentials against secure secrets."""
+        try:
+            valid_user = st.secrets["ADMIN_USERNAME"]
+            valid_pass = st.secrets["ADMIN_PASSWORD"]
+            if username == valid_user and password == valid_pass:
+                st.session_state.is_authenticated = True
+                return True
+            return False
+        except KeyError:
+            st.error("⚠️ Server Configuration Error: Missing Secrets.")
+            return False
+
+    @staticmethod
+    def logout():
+        st.session_state.is_authenticated = False
         st.rerun()
 
 # ==========================================
-# 🖥️ PAGE 1: HOME PAGE
+# 3. DATABASE MANAGEMENT MODULE
 # ==========================================
-if app_page == "🏠 Home":
-    st.markdown("<br><br><br>", unsafe_allow_html=True)
-    st.markdown("<h1 style='text-align: center; color: #2c3e50; font-size: 50px;'>Welcome to Civil Hospital Bathinda</h1>", unsafe_allow_html=True)
-    st.markdown("<h3 style='text-align: center; color: #7f8c8d;'>Office Management & Establishment Portal</h3>", unsafe_allow_html=True)
-    st.markdown("<hr style='width: 50%; margin: auto;'>", unsafe_allow_html=True)
+class DatabaseManager:
+    @staticmethod
+    @st.cache_resource
+    def _get_client() -> Optional[gspread.Client]:
+        """Establishes a secure connection to Google Cloud via Service Account."""
+        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        try:
+            creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
+            return gspread.authorize(creds)
+        except Exception as e:
+            st.error(f"⚠️ Database Connection Failed: {e}")
+            return None
+
+    @classmethod
+    def get_sheet(cls) -> Optional[gspread.Worksheet]:
+        """Fetches the active worksheet."""
+        client = cls._get_client()
+        if client:
+            try:
+                return client.open_by_url(Config.SHEET_URL).sheet1
+            except Exception:
+                st.error("⚠️ Failed to locate the specific Google Sheet. Check URL.")
+        return None
+
+    @classmethod
+    @st.cache_data(ttl=Config.CACHE_TTL)
+    def fetch_records(_cls) -> pd.DataFrame:
+        """Fetches and caches records into a Pandas DataFrame."""
+        sheet = _cls.get_sheet()
+        if sheet:
+            records = sheet.get_all_records()
+            return pd.DataFrame(records)
+        return pd.DataFrame()
+
+    @classmethod
+    def update_posting(cls, emp_name: str, new_posting: str) -> Tuple[bool, str]:
+        """Updates a specific employee's posting securely."""
+        sheet = cls.get_sheet()
+        if not sheet: return False, "Database disconnected."
+        
+        try:
+            cell = sheet.find(emp_name)
+            if not cell: return False, "Employee not found in database."
+            
+            headers = sheet.row_values(1)
+            if "Place of Posting" not in headers:
+                return False, "'Place of Posting' column missing in database architecture."
+            
+            col_idx = headers.index("Place of Posting") + 1
+            sheet.update_cell(cell.row, col_idx, new_posting)
+            st.cache_data.clear() # Clear cache to show live updates immediately
+            return True, "Success"
+        except Exception as e:
+            return False, str(e)
+
+# ==========================================
+# 4. USER INTERFACE (UI) COMPONENTS
+# ==========================================
+def render_sidebar() -> str:
+    """Renders the modular sidebar and returns the selected route."""
+    st.sidebar.markdown("<h2 style='text-align: center; color: #34495e;'>🏥 CH Bathinda</h2>", unsafe_allow_html=True)
+    st.sidebar.caption("Enterprise Resource Portal")
+    st.sidebar.divider()
+    
+    route = st.sidebar.radio("📌 Navigation Menu", ["🏠 Dashboard", "📋 Staff Roster", "🔐 Admin Console"])
+    
+    if st.session_state.is_authenticated:
+        st.sidebar.divider()
+        st.sidebar.success("🟢 Admin Status: Online")
+        if st.sidebar.button("🔒 Terminate Session", use_container_width=True):
+            SecurityManager.logout()
+            
+    return route
+
+def render_dashboard():
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; color: #2c3e50; font-size: 3.5rem;'>Civil Hospital Bathinda</h1>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center; color: #7f8c8d; font-weight: 300;'>Central Office & Establishment Matrix</h3>", unsafe_allow_html=True)
+    st.markdown("<hr style='width: 40%; margin: auto; border-top: 2px solid #ecf0f1;'>", unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.info("👈 Kripya left side menu se 'Posting Position of Staff' select karein employee records dekhne ke liye.")
+        st.info("💡 **Navigation System:** Use the sidebar panel to access the Staff Roster or the Secure Admin Console.")
 
-# ==========================================
-# 🖥️ PAGE 2: POSTING POSITION OF STAFF
-# ==========================================
-elif app_page == "📋 Posting Position of Staff":
-    st.title("📋 Posting Position of Staff")
-    st.caption("Regular Employee Attachment & Duty Ledger")
+def render_staff_roster():
+    st.header("📋 Staff Posting Roster")
+    st.caption("Read-Only Secure Ledger | Data Extraction is Prohibited")
     st.divider()
 
-    df, sheet_obj = load_data()
+    if not st.session_state.is_authenticated:
+        st.warning("🔒 Access Restricted. Authorized personnel must authenticate via the Admin Console to view records.")
+        return
+
+    with st.spinner("Synchronizing with Cloud Database..."):
+        df = DatabaseManager.fetch_records()
 
     if not df.empty:
-        st.markdown("*(Data copying and downloading is strictly restricted by hospital system policies)*")
-        # Secure HTML table rendering (Anti-copy enabled)
-        html_table = df.to_html(index=False, classes="table table-striped", border=0)
+        # Display Quick Metrics
+        col1, col2 = st.columns(2)
+        col1.metric("Total Active Staff", len(df))
+        if 'Designation' in df.columns:
+            col2.metric("Unique Designations", df['Designation'].nunique())
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        # Render Secure Custom HTML Table
+        html_table = df.to_html(index=False, classes="corporate-table", border=0)
         st.markdown(f"<div style='width: 100%; overflow-x: auto;'>{html_table}</div>", unsafe_allow_html=True)
     else:
-        st.warning("⚠️ Loading data or Google Sheet is currently empty.")
+        st.info("📭 Database is currently empty or awaiting synchronization.")
 
-# ==========================================
-# 🖥️ PAGE 3: ADMIN UPDATE PORTAL
-# ==========================================
-elif app_page == "🔐 Admin Update Portal":
-    st.title("🔐 Admin Workspace")
-    st.caption("Secure Portal for Establishment Updates")
+def render_admin_console():
+    st.header("🔐 Admin Operations Console")
+    st.caption("Secure Environment for Establishment Adjustments")
     st.divider()
 
-    if not st.session_state.authenticated:
+    if not st.session_state.is_authenticated:
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
-            st.info("Data update karne ke liye Admin Login zaroori hai.")
-            with st.form("login_form"):
-                username = st.text_input("Admin Username")
-                password = st.text_input("Secure Password", type="password")
-                submitted = st.form_submit_button("Authenticate 🚀", use_container_width=True)
-                
-                if submitted:
-                    if username == ADMIN_USER and password == ADMIN_PASS:
-                        st.session_state.authenticated = True
-                        st.success("Access Granted! Loading update panel...")
+            st.info("Please provide administrative credentials to proceed.")
+            with st.form("auth_form"):
+                user = st.text_input("Administrator ID")
+                pwd = st.text_input("Security Key", type="password")
+                if st.form_submit_button("Initiate Secure Handshake 🚀", use_container_width=True):
+                    if SecurityManager.login(user, pwd):
                         st.rerun()
                     else:
-                        st.error("❌ Invalid Credentials. Entry Denied.")
+                        st.error("❌ Authentication Failed. Unauthorized access attempt logged.")
     else:
-        # User is Logged In
-        df, sheet_obj = load_data()
-        
-        if not df.empty and sheet_obj:
-            with st.form("update_posting_form"):
-                st.markdown("#### 🔄 Update Employee Station/Posting")
+        df = DatabaseManager.fetch_records()
+        if not df.empty and 'Employee Name' in df.columns:
+            with st.form("roster_update_form"):
+                st.markdown("### 🔄 Station Allocation Manager")
                 
-                # Fetching Employee Names for the dropdown
-                if 'Employee Name' in df.columns:
-                    employee_list = df['Employee Name'].dropna().tolist()
-                    selected_emp = st.selectbox("Select Employee:", ["-- Select Staff Member --"] + employee_list)
-                    new_posting = st.text_input("Enter New Posting / Station / Ward:")
-                    
-                    update_btn = st.form_submit_button("Update Records to Google Sheet")
-                    
-                    if update_btn:
-                        if selected_emp == "-- Select Staff Member --":
-                            st.error("⚠️ Please select a valid employee from the list.")
-                        elif not new_posting:
-                            st.error("⚠️ Please enter the new posting details.")
-                        else:
-                            try:
-                                # Find row and update
-                                cell = sheet_obj.find(selected_emp)
-                                header_row = sheet_obj.row_values(1)
-                                
-                                if "Place of Posting" in header_row:
-                                    posting_col_idx = header_row.index("Place of Posting") + 1
-                                    sheet_obj.update_cell(cell.row, posting_col_idx, new_posting)
-                                    st.success(f"✅ Posting for **{selected_emp}** successfully updated to **'{new_posting}'**!")
-                                    st.rerun()
-                                else:
-                                    st.error("⚠️ 'Place of Posting' column not found in Google Sheet.")
-                            except Exception as e:
-                                st.error("⚠️ Error updating sheet. Verify your exact sheet structure.")
-                else:
-                    st.error("⚠️ 'Employee Name' column not found in the Google Sheet.")
+                employees = df['Employee Name'].dropna().tolist()
+                selected_emp = st.selectbox("Target Personnel:", ["-- Select ID --"] + employees)
+                new_station = st.text_input("New Allocation / Duty Station:")
+                
+                if st.form_submit_button("Deploy Changes to Cloud ☁️"):
+                    if selected_emp == "-- Select ID --" or not new_station:
+                        st.warning("⚠️ Invalid input parameters. Please complete all fields.")
+                    else:
+                        with st.spinner("Processing transaction..."):
+                            success, msg = DatabaseManager.update_posting(selected_emp, new_station)
+                            if success:
+                                st.toast(f"Database synced successfully!", icon="✅")
+                                st.success(f"✅ Protocol complete: **{selected_emp}** relocated to **{new_station}**.")
+                                st.rerun()
+                            else:
+                                st.error(f"❌ Transaction Failed: {msg}")
+        else:
+            st.error("⚠️ Database schema invalid. 'Employee Name' column is mandatory.")
+
+# ==========================================
+# 5. MAIN APPLICATION CONTROLLER
+# ==========================================
+def main():
+    SecurityManager.init_session()
+    SecurityManager.apply_strict_ui_policies()
+    
+    current_route = render_sidebar()
+    
+    if current_route == "🏠 Dashboard":
+        render_dashboard()
+    elif current_route == "📋 Staff Roster":
+        render_staff_roster()
+    elif current_route == "🔐 Admin Console":
+        render_admin_console()
+
+if __name__ == "__main__":
+    main()
