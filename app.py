@@ -94,13 +94,11 @@ def fetch_roster_data(sheet_index):
         client = get_gspread_client()
         worksheet = client.open_by_url(SHEET_URL).get_worksheet(sheet_index)
         if worksheet is not None:
-            # 🎯 EXPERT FIX: Prevent Duplicate/Empty Header Crashes
             data = worksheet.get_all_values()
             if not data:
                 return pd.DataFrame()
                 
             df = pd.DataFrame(data[1:], columns=data[0])
-            # Drop purely empty columns created by stray spaces in Google Sheets
             df = df.loc[:, (df.columns != '') & (~df.columns.isna())]
             return df
             
@@ -156,7 +154,11 @@ def render_roster_dashboard(title, sheet_index):
         st.warning("⚠️ Database schema is empty or connection is offline.")
         return
 
-    st.markdown("#### ⚙️ Filter Records")
+    st.markdown("#### 🔍 Search & Filter Records")
+    
+    # --- UNIVERSAL SEARCH BAR ADDED HERE ---
+    search_term = st.text_input("🔎 Universal Search (Search by Name, Ward, or any detail):", placeholder="Type here to search...", key=f"search_{sheet_index}")
+    
     f_col1, f_col2 = st.columns(2)
     processed_df = df.copy()
     
@@ -174,11 +176,19 @@ def render_roster_dashboard(title, sheet_index):
             if selected_posting != "All Workstations":
                 processed_df = processed_df[processed_df['Place of Posting'] == selected_posting]
 
+    # --- SMART SEARCH LOGIC ---
+    if search_term:
+        mask = processed_df.astype(str).apply(lambda x: x.str.contains(search_term, case=False, na=False)).any(axis=1)
+        processed_df = processed_df[mask]
+
     st.markdown("<br>", unsafe_allow_html=True)
     st.metric("Total Personnel Located", len(processed_df))
 
-    html_grid = processed_df.to_html(index=False, classes="enterprise-table", border=0)
-    st.markdown(f"<div style='width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch;'>{html_grid}</div>", unsafe_allow_html=True)
+    if not processed_df.empty:
+        html_grid = processed_df.to_html(index=False, classes="enterprise-table", border=0)
+        st.markdown(f"<div style='width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch;'>{html_grid}</div>", unsafe_allow_html=True)
+    else:
+        st.info("⚠️ Koi record match nahi hua. Kripya apna search keyword check karein.")
 
 def render_admin_console():
     st.markdown("### 🔐 Admin Operations Console")
@@ -186,7 +196,7 @@ def render_admin_console():
     st.divider()
     
     st.markdown("#### 🔄 Station Allocation Manager")
-    staff_category = st.radio("Select Staff Category:", ["Regular Staff", "Contractual Staff"], horizontal=True)
+    staff_category = st.radio("Select Staff Category:", ["Regular Staff", "Outsource Staff"], horizontal=True)
     
     sheet_idx = 0 if staff_category == "Regular Staff" else 1
     df = fetch_roster_data(sheet_idx)
@@ -229,29 +239,21 @@ else:
     app_page = st.radio(
         "Navigation",
         [
-            "📋 Regular", "📝 Contract", "🤝 Outsource", "🔗 Deputation",
-            "🏥 Reg Detail", "🏢 Out Detail", "🔐 Update", "⚙️ Log"
+            "📋 Regular", "🤝 Outsource", "🏥 Reg Detail", "🏢 Out Detail", "🔐 Update"
         ],
         horizontal=True,
         label_visibility="collapsed"
     )
     
     st.markdown("<hr style='margin-top: 0.5rem; margin-bottom: 1.5rem;'>", unsafe_allow_html=True)
-
+    
     if app_page == "📋 Regular":
-        render_roster_dashboard("📋 Regular Staff", sheet_index=0)
-    elif app_page == "📝 Contract":
-        render_roster_dashboard("📝 Contractual Staff", sheet_index=1)
+        render_roster_dashboard("📋 Regular Staff Ledger", sheet_index=0)
     elif app_page == "🤝 Outsource":
-        render_roster_dashboard("🤝 Outsource Staff", sheet_index=2)
-    elif app_page == "🔗 Deputation":
-        render_roster_dashboard("🔗 Deputation Staff", sheet_index=3)
+        render_roster_dashboard("🤝 Outsource Staff Ledger", sheet_index=1)
     elif app_page == "🏥 Reg Detail":
-        render_roster_dashboard("🏥 Regular Detail", sheet_index=4)
+        render_roster_dashboard("🏥 Regular Staff Detail Ledger", sheet_index=2)
     elif app_page == "🏢 Out Detail":
-        render_roster_dashboard("🏢 Outsource Detail", sheet_index=5)
+        render_roster_dashboard("🏢 Outsource Staff Detail Ledger", sheet_index=3)
     elif app_page == "🔐 Update":
         render_admin_console()
-    elif app_page == "⚙️ Log":
-        st.markdown("### ⚙️ System Status")
-        st.info("All systems operational. Network latency: Minimal. Security protocol active.")
