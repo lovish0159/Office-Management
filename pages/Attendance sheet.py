@@ -14,7 +14,7 @@ def check_password():
     """Returns `True` if the user had the correct password."""
     def password_entered():
         # 🎯 EXPERT FIX: Password ab code mein nahi, Streamlit Secrets se aayega
-        if st.session_state["password"] == st.secrets["admin_password"]: 
+        if st.session_state["password"] == st.secrets["ADMIN_PASSWORD"]: 
             st.session_state["password_correct"] = True
             del st.session_state["password"]  # Memory se delete
         else:
