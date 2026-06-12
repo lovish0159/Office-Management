@@ -1,52 +1,59 @@
 import streamlit as st
 import pandas as pd
+import io
 from datetime import datetime
 
 # ==========================================
-# 1. ENTERPRISE CONFIGURATION
+# ENTERPRISE CONFIGURATION
 # ==========================================
-st.set_page_config(page_title="Secure Attendance Portal", page_icon="🏥", layout="wide")
+st.set_page_config(page_title="Smart Attendance Register", page_icon="🏥", layout="wide")
 
 # ==========================================
-# 2. ADVANCED SECURITY PROTOCOL (Hidden Password)
+# SECURITY PROTOCOL (Streamlit Secrets)
 # ==========================================
 def check_password():
     """Returns `True` if the user had the correct password."""
     def password_entered():
-        # 🎯 EXPERT FIX: Password ab code mein nahi, Streamlit Secrets se aayega
-        if st.session_state["password"] == st.secrets["ADMIN_PASSWORD"]: 
+        # Code is secure for GitHub. Password fetches from Streamlit Cloud Secrets.
+        if st.session_state["password"] == st.secrets["admin_password"]:
             st.session_state["password_correct"] = True
-            del st.session_state["password"]  # Memory se delete
+            del st.session_state["password"]  # Clear from memory
         else:
             st.session_state["password_correct"] = False
 
     if "password_correct" not in st.session_state:
-        st.markdown("<h2 style='text-align: center;'>🔒 Secure Login Portal</h2>", unsafe_allow_html=True)
-        st.text_input("Enter Admin Password to Access Register:", type="password", on_change=password_entered, key="password")
+        st.markdown("<h2 style='text-align: center;'>🔒 Secure Admin Portal</h2>", unsafe_allow_html=True)
+        st.text_input("Enter Master Password:", type="password", on_change=password_entered, key="password")
         return False
     elif not st.session_state["password_correct"]:
-        st.markdown("<h2 style='text-align: center;'>🔒 Secure Login Portal</h2>", unsafe_allow_html=True)
-        st.text_input("Enter Admin Password to Access Register:", type="password", on_change=password_entered, key="password")
+        st.markdown("<h2 style='text-align: center;'>🔒 Secure Admin Portal</h2>", unsafe_allow_html=True)
+        st.text_input("Enter Master Password:", type="password", on_change=password_entered, key="password")
         st.error("❌ Incorrect Password. Access Denied.")
         return False
     return True
 
 # ==========================================
-# 3. CORE ATTENDANCE ENGINE
+# CORE ATTENDANCE ENGINE & AUTO-FILL
 # ==========================================
 def initialize_data():
+    """Sets up the dataframe based on the official Civil Hospital format."""
+    # Dates from 16 to 30 and 1 to 15
+    dates_part1 = [str(i) for i in range(16, 31)]
+    dates_part2 = [str(i) for i in range(1, 16)]
+    all_dates = dates_part1 + dates_part2
+
+    # Sample data matching the first few entries of the uploaded sheet
     data = {
-        "ਲੜੀ ਨੰ. (S.No)": [1, 2, 3, 4, 5],
-        "ਅਧਿਕਾਰੀ ਦਾ ਨਾਮ (Name)": ["Dr. Gopi Mehra", "Dr. Navjot Singh", "Dr. Ramandeep Kaur", "Dr. Deepak Sharma", "Dr. Vishal Agarwal"],
-        "ਅਹੁਦਾ (Designation)": ["Medical Officer", "Medical Officer", "Medical Officer", "Medical Officer", "Medical Officer"],
-        "ਅਸਲ ਪੋਸਟਿੰਗ (Posting)": ["Emergency", "OPD", "Ward", "ICU", "Dispensary"]
+        "ਲੜੀ ਨੰ.": [1, 2, 3, 4, 5],
+        "ਅਧਿਕਾਰੀ ਦਾ ਨਾਮ": ["ਡਾ: ਰੋਹਿਣੀ ਚੋਪੜਾ", "ਡਾ: ਨਵਦੀਪ ਸਿੰਘ", "ਡਾ: ਲਵਦੀਪ ਸਿੰਘ", "ਡਾ: ਨਵਦੀਪ ਰਾਈ", "ਡਾ: ਦੀਪਕ ਗਰਗ"],
+        "ਅਹੁਦਾ": ["ਮੈਡੀਕਲ ਅਫਸਰ", "ਮੈਡੀਕਲ ਅਫਸਰ", "ਮੈਡੀਕਲ ਅਫਸਰ", "ਮੈਡੀਕਲ ਅਫਸਰ", "ਮੈਡੀਕਲ ਅਫਸਰ"],
+        "ਅਸਲ ਪੋਸਟਿੰਗ": ["ਚਿਲਡਰਨ ਹਸਪਤਾਲ", "ਤਲਵੰਡੀ ਸਾਬੋ", "ਐਸ.ਡੀ.ਐਚ ਘੁੱਦਾ", "ਤਲਵੰਡੀ ਸਾਬੋ", "ਚਿਲਡਰਨ ਹਸਪਤਾਲ"]
     }
     df = pd.DataFrame(data)
     
-    for day in range(16, 32):
-        df[str(day)] = "P" 
-    for day in range(1, 16):
-        df[str(day)] = "P"
+    # ⚡ TIME SAVER: Auto-fill all dates with 'P' (Present)
+    for date in all_dates:
+        df[date] = "P"
         
     df["ਵਿਸ਼ੇਸ਼ ਕਥਨ (Remarks)"] = ""
     return df
@@ -55,25 +62,27 @@ def main():
     if not check_password():
         return
 
-    st.markdown("<h1 style='text-align: center; color: #1e3a8a;'>🏥 ਹਾਜ਼ਰੀ ਰਿਪੋਰਟ (Attendance Report)</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: #64748b;'>ਦਫਤਰ ਸੀਨੀਅਰ ਮੈਡੀਕਲ ਅਫਸਰ ਇੰਚ: ਸਿਵਲ ਹਸਪਤਾਲ</p>", unsafe_allow_html=True)
+    # Header
+    st.markdown("<h2 style='text-align: center; color: #1e3a8a;'>🏥 ਹਾਜਰੀ ਰਿਪੋਰਟ (Attendance Report)</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #64748b;'>ਦਫਤਰ ਸੀਨੀਅਰ ਮੈਡੀਕਲ ਅਫਸਰ ਇੰ. ਸਿਵਲ ਹਸਪਤਾਲ ਬਠਿੰਡਾ</p>", unsafe_allow_html=True)
     st.divider()
 
+    # Load Data
     if "attendance_df" not in st.session_state:
         st.session_state.attendance_df = initialize_data()
 
-    st.markdown("### 📝 Mark Daily Attendance")
-    st.info("💡 Instructions: Double click on any cell under a date to change the attendance status.")
-
-    status_codes = ["P", "A", "D/O", "T", "CL", "EL", "ML", "C"]
+    st.markdown("### 📝 Digital Register (Double Click to Edit)")
     
+    # Dropdown Options extracted from the document
+    status_codes = ["P", "A", "D/O", "T", "CL", "CE", "JD", "CCL", "SL"]
+    
+    # Configure strict columns to prevent typing errors
     column_config = {
-        "ਲੜੀ ਨੰ. (S.No)": st.column_config.NumberColumn(disabled=True),
-        "ਅਧਿਕਾਰੀ ਦਾ ਨਾਮ (Name)": st.column_config.TextColumn(disabled=True),
-        "ਅਹੁਦਾ (Designation)": st.column_config.TextColumn(disabled=True),
-        "ਅਸਲ ਪੋਸਟਿੰਗ (Posting)": st.column_config.TextColumn(disabled=True),
+        "ਲੜੀ ਨੰ.": st.column_config.NumberColumn(disabled=True),
+        "ਅਧਿਕਾਰੀ ਦਾ ਨਾਮ": st.column_config.TextColumn(disabled=False), # Allow adding new doctors
     }
     
+    # Apply dropdowns to all date columns
     for col in st.session_state.attendance_df.columns:
         if col.isdigit():
             column_config[col] = st.column_config.SelectboxColumn(
@@ -81,34 +90,35 @@ def main():
                 required=True
             )
 
+    # Render Interactive Editor
     edited_df = st.data_editor(
         st.session_state.attendance_df,
         column_config=column_config,
         use_container_width=True,
         hide_index=True,
-        num_rows="dynamic" 
+        num_rows="dynamic" # Add rows dynamically
     )
 
+    # Save state
     st.session_state.attendance_df = edited_df
 
     st.divider()
-    st.markdown("### 📥 Export Final Report")
+    st.markdown("### 📥 Export & Download")
     
+    # Excel Generation
     @st.cache_data
     def convert_df_to_excel(df):
-        import io
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df.to_excel(writer, index=False, sheet_name='Attendance Report')
-        processed_data = output.getvalue()
-        return processed_data
+        return output.getvalue()
 
     excel_data = convert_df_to_excel(st.session_state.attendance_df)
 
     st.download_button(
-        label="📊 Download Attendance Sheet (Excel)",
+        label="📊 Download Ready Excel Sheet",
         data=excel_data,
-        file_name=f"Attendance_Report_{datetime.now().strftime('%b_%Y')}.xlsx",
+        file_name=f"Hospital_Attendance_{datetime.now().strftime('%d_%b_%Y')}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         type="primary"
     )
