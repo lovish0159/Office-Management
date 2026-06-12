@@ -170,24 +170,38 @@ def main():
         2. ਸੀਨੀਅਰ ਮੈਡੀਕਲ ਅਫਸਰ ਚਿਲਡਰਨ ਤੇ ਜਨਰਲ ਹਪਸਤਾਲ ਬਠਿੰਡਾ
         """, unsafe_allow_html=True)
         
-    @st.cache_data
+        @st.cache_data
     def convert_df_to_excel(df):
         output = io.BytesIO()
+        
+        # openpyxl engine ke saath ExcelWriter open karein
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False, sheet_name='Attendance Report')
+            # 🎯 EXPERT FIX: Table ko row number 5 (startrow=4) se shuru karein, taaki upar jagah bache
+            df.to_excel(writer, index=False, sheet_name='Attendance Report', startrow=4)
+            
+            # Workbook aur worksheet ko access karein
+            workbook = writer.book
+            worksheet = writer.sheets['Attendance Report']
+            
+            # openpyxl se styling tools import karein
+            from openpyxl.styles import Font, Alignment
+            
+            # 📝 OFFICIAL PUNJABI TEXT LIKHEIN (Row 1, 2, aur 3 mein)
+            worksheet['A1'] = "ਦਫਤਰ ਸੀਨੀਅਰ ਮੈਡੀਕਲ ਅਫਸਰ ਇੰ. ਸਿਵਲ ਹਸਪਤਾਲ ਬਠਿੰਡਾ।"
+            worksheet['A2'] = "ਤਸਦੀਕ ਕੀਤਾ ਜਾਂਦਾ ਹੈ ਕਿ ਮੈਡੀਕਲ ਅਫਸਰ ਹੇਠ ਲਿਖੇ ਅਨੁਸਾਰ ਆਪਣੀ ਡਿਊਟੀ ਤੇ ਹਾਜਰ ਰਹੇ।"
+            worksheet['A3'] = f"ਹਾਜਰੀ ਰਿਪੋਰਟ ਮਹੀਨਾ: {datetime.now().strftime('%B %Y')}"
+            
+            # Text ko Bold aur Left/Center align karein
+            header_font = Font(bold=True, size=14, color="000000")
+            sub_font = Font(bold=True, size=12, color="000000")
+            
+            worksheet['A1'].font = header_font
+            worksheet['A2'].font = sub_font
+            worksheet['A3'].font = sub_font
+            
+            # Cells ko aapas mein jodh (merge) dein taaki text pure page par fail jaye
+            worksheet.merge_cells('A1:J1')
+            worksheet.merge_cells('A2:J2')
+            worksheet.merge_cells('A3:J3')
+            
         return output.getvalue()
-
-    excel_data = convert_df_to_excel(final_attendance_df)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.download_button(
-        label="📥 Download Final Excel Sheet (Auto-Filled with 'P')",
-        data=excel_data,
-        file_name=f"Hospital_Attendance_{datetime.now().strftime('%b_%Y')}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        type="primary",
-        use_container_width=True
-    )
-
-if __name__ == "__main__":
-    main()
