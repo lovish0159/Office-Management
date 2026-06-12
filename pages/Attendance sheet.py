@@ -44,19 +44,15 @@ def check_password():
 # ==========================================
 # 3. GOOGLE SHEETS DATA FETCHING
 # ==========================================
-@st.cache_data(ttl=60) # Data 60 seconds tak cache rahega, fast loading ke liye
+@st.cache_data(ttl=60)
 def load_staff_from_gsheet():
     try:
-        # Establish connection to Google Sheets
         conn = st.connection("gsheets", type=GSheetsConnection)
-        # Apni Google Sheet se data read karein (Sheet1 aapka tab name hona chahiye)
         df = conn.read(worksheet="Sheet1")
-        # Khali rows ko hata dein
         df = df.dropna(how="all")
         return df
     except Exception as e:
         st.error(f"⚠️ Google Sheet se connect karne mein error: {e}")
-        # Agar sheet connect na ho toh backup data use karein
         return pd.DataFrame({
             "ਲੜੀ ਨੰ. (S.No)": [1],
             "ਅਧਿਕਾਰੀ ਦਾ ਨਾਮ (Name)": ["Sheet connection failed"],
@@ -72,7 +68,6 @@ LEAVE_TYPES = ["CL", "D/O", "T", "CE", "JD", "CCL", "SL", "A", "Off", "-"]
 
 def init_state():
     if "staff_list" not in st.session_state:
-        # Data ab Google Sheet se aayega
         st.session_state.staff_list = load_staff_from_gsheet()
     
     if "leave_records" not in st.session_state:
@@ -105,7 +100,7 @@ def generate_final_attendance():
     return df
 
 # ==========================================
-# 6. USER INTERFACE & PUNJABI PDF TEXT
+# 6. USER INTERFACE & DOWNLOAD ENGINE
 # ==========================================
 def main():
     if not check_password():
@@ -115,11 +110,11 @@ def main():
     
     st.markdown("<div class='main-header'>🏥 Hospital Attendance System</div>", unsafe_allow_html=True)
     
-    # --- OFFICIAL PUNJABI LETTERHEAD (From PDF) ---
+    # Official Punjabi Letterhead UI
     st.markdown("""
         <div class='punjabi-text'>
             ਦਫਤਰ ਸੀਨੀਅਰ ਮੈਡੀਕਲ ਅਫਸਰ ਇੰ. ਸਿਵਲ ਹਸਪਤਾਲ ਬਠਿੰਡਾ। <br>
-            <span style='font-weight: normal; font-size: 1rem;'>ਤਸਦੀਕ ਕੀਤਾ ਜਾਂਦਾ ਹੈ ਕਿ ਹੈ ਕਿ ਮੈਡੀਕਲ ਅਫਸਰ ਹੇਠ ਲਿਖੇ ਅਨੁਸਾਰ ਆਪਣੀ ਡਿਊਟੀ ਤੇ ਹਾਜਰ ਰਹੇ ।</span>
+            <span style='font-weight: normal; font-size: 1rem;'>ਤਸਦੀਕ ਕੀਤਾ ਜਾਂਦਾ ਹੈ ਕਿ ਮੈਡੀਕਲ ਅਫਸਰ ਹੇਠ ਲਿਖੇ ਅਨੁਸਾਰ ਆਪਣੀ ਡਿਊਟੀ ਤੇ ਹਾਜਰ ਰਹੇ ।</span>
         </div>
     """, unsafe_allow_html=True)
     
@@ -127,7 +122,7 @@ def main():
     
     with col1:
         st.markdown("<h3 class='section-title'>👥 1. Live Staff List (From G-Sheet)</h3>", unsafe_allow_html=True)
-        st.caption("Yeh data automatically aapki Google Sheet se aa raha hai. Taza karne ke liye page refresh karein.")
+        st.caption("Yeh data automatically aapki Google Sheet se aa raha hai.")
         st.dataframe(st.session_state.staff_list, use_container_width=True, hide_index=True)
 
     with col2:
@@ -163,35 +158,24 @@ def main():
     with st.expander("👁️ Preview Final Auto-Filled Sheet", expanded=False):
         st.dataframe(final_attendance_df, use_container_width=True, hide_index=True)
         
-        # PDF se official utara text
-        st.markdown("""
-        **ਉਤਾਰਾ:-** <br>
-        1. ਸਿਵਲ ਸਰਜਨ ਬਠਿੰਡਾ ਜੀ <br>
-        2. ਸੀਨੀਅਰ ਮੈਡੀਕਲ ਅਫਸਰ ਚਿਲਡਰਨ ਤੇ ਜਨਰਲ ਹਪਸਤਾਲ ਬਠਿੰਡਾ
-        """, unsafe_allow_html=True)
-        
-        @st.cache_data
+    # --- EXPERT EXCEL FORMATTING WITH OPENPYXL ---
+    @st.cache_data
     def convert_df_to_excel(df):
         output = io.BytesIO()
-        
-        # openpyxl engine ke saath ExcelWriter open karein
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            # 🎯 EXPERT FIX: Table ko row number 5 (startrow=4) se shuru karein, taaki upar jagah bache
+            # Table 5th row se shuru hogi
             df.to_excel(writer, index=False, sheet_name='Attendance Report', startrow=4)
             
-            # Workbook aur worksheet ko access karein
             workbook = writer.book
             worksheet = writer.sheets['Attendance Report']
-            
-            # openpyxl se styling tools import karein
             from openpyxl.styles import Font, Alignment
             
-            # 📝 OFFICIAL PUNJABI TEXT LIKHEIN (Row 1, 2, aur 3 mein)
+            # Punjabi Official Text Insertion
             worksheet['A1'] = "ਦਫਤਰ ਸੀਨੀਅਰ ਮੈਡੀਕਲ ਅਫਸਰ ਇੰ. ਸਿਵਲ ਹਸਪਤਾਲ ਬਠਿੰਡਾ।"
             worksheet['A2'] = "ਤਸਦੀਕ ਕੀਤਾ ਜਾਂਦਾ ਹੈ ਕਿ ਮੈਡੀਕਲ ਅਫਸਰ ਹੇਠ ਲਿਖੇ ਅਨੁਸਾਰ ਆਪਣੀ ਡਿਊਟੀ ਤੇ ਹਾਜਰ ਰਹੇ।"
             worksheet['A3'] = f"ਹਾਜਰੀ ਰਿਪੋਰਟ ਮਹੀਨਾ: {datetime.now().strftime('%B %Y')}"
             
-            # Text ko Bold aur Left/Center align karein
+            # Formatting fonts (Bold and size adjustments)
             header_font = Font(bold=True, size=14, color="000000")
             sub_font = Font(bold=True, size=12, color="000000")
             
@@ -199,9 +183,24 @@ def main():
             worksheet['A2'].font = sub_font
             worksheet['A3'].font = sub_font
             
-            # Cells ko aapas mein jodh (merge) dein taaki text pure page par fail jaye
+            # Merging cells for centered header look
             worksheet.merge_cells('A1:J1')
             worksheet.merge_cells('A2:J2')
             worksheet.merge_cells('A3:J3')
             
         return output.getvalue()
+
+    excel_data = convert_df_to_excel(final_attendance_df)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.download_button(
+        label="📥 Download Official Excel Sheet",
+        data=excel_data,
+        file_name=f"Hospital_Attendance_{datetime.now().strftime('%b_%Y')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        type="primary",
+        use_container_width=True
+    )
+
+if __name__ == "__main__":
+    main()
