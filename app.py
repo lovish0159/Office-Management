@@ -2,12 +2,8 @@ import streamlit as st
 import pandas as pd
 
 # ==========================================
-# 1. CREDENTIALS & ENTERPRISE CONFIGURATION
+# 1. ENTERPRISE CONFIGURATION
 # ==========================================
-# 👇 YAHAN APNA USERNAME AUR PASSWORD SET KAREIN 👇
-ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = "Password@123"
-
 st.set_page_config(page_title="Hospital HR Portal", page_icon="🏢", layout="wide")
 
 # 🛡️ STRICT ANTI-THEFT SHIELD (CSS)
@@ -42,7 +38,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. USERNAME & PASSWORD AUTHENTICATION
+# 2. STREAMLIT SECRETS AUTHENTICATION
 # ==========================================
 def check_login():
     if "logged_in" not in st.session_state:
@@ -65,12 +61,19 @@ def check_login():
             submit_button = st.form_submit_button("Secure Login", use_container_width=True)
 
             if submit_button:
-                if input_username == ADMIN_USERNAME and input_password == ADMIN_PASSWORD:
-                    st.session_state["logged_in"] = True
-                    st.session_state["current_user"] = input_username
-                    st.rerun()
-                else:
-                    st.error("❌ Invalid Username or Password. Access Denied.")
+                try:
+                    # 🎯 FETCHING CREDENTIALS FROM STREAMLIT SECRETS
+                    SECRET_USER = st.secrets["admin_username"]
+                    SECRET_PASS = st.secrets["admin_password"]
+                    
+                    if input_username == SECRET_USER and input_password == SECRET_PASS:
+                        st.session_state["logged_in"] = True
+                        st.session_state["current_user"] = input_username
+                        st.rerun()
+                    else:
+                        st.error("❌ Invalid Username or Password. Access Denied.")
+                except Exception:
+                    st.error("⚠️ Streamlit Secrets set nahi hain. Kripya app settings mein username aur password add karein.")
 
     return False
 
@@ -84,8 +87,10 @@ def logout():
 # ==========================================
 @st.cache_data(ttl=60)
 def load_data_from_sheet(sheet_name):
+    # 🎯 APKI SHEET KA EXACT LINK ID YAHAN ADDED HAI
     SHEET_ID = "1FpDrz63M5Ix_rphXoonZHCDy_PAOUjsrzYIC3AFkUzo"
     csv_url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
+    
     try:
         df = pd.read_csv(csv_url)
         df = df.dropna(how="all") 
@@ -94,7 +99,7 @@ def load_data_from_sheet(sheet_name):
             df.index = df.index + 1
         return df
     except Exception as e:
-        return pd.DataFrame({"System Alert": [f"⚠️ Error: Data load nahi hua ({sheet_name})."]})
+        return pd.DataFrame({"System Alert": [f"⚠️ Error: Data load nahi hua ({sheet_name}). Kripya ensure karein sheet 'Anyone with link' par set hai."]})
 
 # ==========================================
 # 4. ADVANCED PAGE DESIGNS (WITH SEARCH)
