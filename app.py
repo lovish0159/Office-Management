@@ -6,32 +6,22 @@ import pandas as pd
 # ==========================================
 st.set_page_config(page_title="Hospital HR Portal", page_icon="🏢", layout="wide")
 
-# 🛡️ STRICT ANTI-THEFT SHIELD (CSS)
 st.markdown("""
     <style>
-        /* Hide Header, Footer, and Streamlit Menus */
         #MainMenu, footer, header {visibility: hidden !important;}
-        
-        /* Hide DataFrame Toolbars (Blocks Download/Search icons above tables) */
         [data-testid="stToolbar"], [data-testid="stElementToolbar"] {visibility: hidden !important; display: none !important;}
-        
-        /* Disable Text Selection and Copying completely */
         * {
             -webkit-user-select: none !important;
             -moz-user-select: none !important;
             -ms-user-select: none !important;
             user-select: none !important;
         }
-
-        /* Disable Printing (Blocks Ctrl+P) */
         @media print {
             html, body { display: none !important; }
         }
-
-        /* UI Styling */
         .main-header { font-size: 2.5rem; color: #1e3a8a; font-weight: 800; margin-bottom: 0px; text-align: center;}
         .sub-header { color: #64748b; font-size: 16px; margin-bottom: 20px; text-align: center;}
-        .card { background-color: #f8fafc; border-radius: 10px; padding: 20px; border: 1px solid #e2e8f0; margin-bottom: 15px; text-align: center;}
+        .card { background-color: #f8fafc; border-radius: 10px; padding: 20px; border: 1px solid #e2e8f0; margin-bottom: 15px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);}
         div.row-widget.stRadio > div { flex-direction: row; justify-content: center; background-color: #f1f5f9; padding: 10px; border-radius: 10px; flex-wrap: wrap;}
         div.row-widget.stRadio > div > label { margin-right: 15px; padding: 5px 10px; cursor: pointer; }
     </style>
@@ -62,7 +52,7 @@ def check_login():
 
             if submit_button:
                 try:
-                    # 🎯 FETCHING CREDENTIALS FROM STREAMLIT SECRETS
+                    # SECRETS SE ID PASSWORD CHECK HOGA
                     SECRET_USER = st.secrets["ADMIN_USERNAME"]
                     SECRET_PASS = st.secrets["ADMIN_PASSWORD"]
                     
@@ -71,9 +61,9 @@ def check_login():
                         st.session_state["current_user"] = input_username
                         st.rerun()
                     else:
-                        st.error("❌ Invalid Username or Password. Access Denied.")
+                        st.error("❌ Invalid Username or Password.")
                 except Exception:
-                    st.error("⚠️ Streamlit Secrets set nahi hain. Kripya app settings mein username aur password add karein.")
+                    st.error("⚠️ Streamlit Secrets set nahi hain.")
 
     return False
 
@@ -87,7 +77,6 @@ def logout():
 # ==========================================
 @st.cache_data(ttl=60)
 def load_data_from_sheet(sheet_name):
-    # 🎯 APKI SHEET KA EXACT LINK ID YAHAN ADDED HAI
     SHEET_ID = "1FpDrz63M5Ix_rphXoonZHCDy_PAOUjsrzYIC3AFkUzo"
     csv_url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
     
@@ -99,10 +88,10 @@ def load_data_from_sheet(sheet_name):
             df.index = df.index + 1
         return df
     except Exception as e:
-        return pd.DataFrame({"System Alert": [f"⚠️ Error: Data load nahi hua ({sheet_name}). Kripya ensure karein sheet 'Anyone with link' par set hai."]})
+        return pd.DataFrame({"System Alert": [f"⚠️ Error: Sheet public nahi hai ya '{sheet_name}' tab maujood nahi hai."]})
 
 # ==========================================
-# 4. ADVANCED PAGE DESIGNS (WITH SEARCH)
+# 4. ADVANCED PAGE DESIGNS (WITH LIVE COUNTS)
 # ==========================================
 def render_smart_table(df, title):
     if "System Alert" in df.columns or df.empty:
@@ -122,13 +111,24 @@ def render_smart_table(df, title):
 
 def show_home():
     st.markdown("<br>", unsafe_allow_html=True)
+    
+    # 🎯 EXPERT FIX: Ab Home Page par asli counting show hogi
+    with st.spinner("Fetching live data from Google Sheets..."):
+        df1 = load_data_from_sheet("Sheet1")
+        df2 = load_data_from_sheet("Sheet2")
+        df6 = load_data_from_sheet("Sheet6")
+        
+        count1 = 0 if "System Alert" in df1.columns else len(df1)
+        count2 = 0 if "System Alert" in df2.columns else len(df2)
+        count6 = 0 if "System Alert" in df6.columns else len(df6)
+
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.markdown("<div class='card'><h3>🩺 Regular Staff</h3><h1 style='color:#2563eb;'>Sheet 1</h1></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='card'><h3>🩺 Regular Staff</h3><h1 style='color:#2563eb;'>{count1}</h1><p>Total Records (Sheet 1)</p></div>", unsafe_allow_html=True)
     with col2:
-        st.markdown("<div class='card'><h3>🤝 Outsource Staff</h3><h1 style='color:#16a34a;'>Sheet 2</h1></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='card'><h3>🤝 Outsource Staff</h3><h1 style='color:#16a34a;'>{count2}</h1><p>Total Records (Sheet 2)</p></div>", unsafe_allow_html=True)
     with col3:
-        st.markdown("<div class='card'><h3>🏥 Ward Attendants</h3><h1 style='color:#dc2626;'>Sheet 6</h1></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='card'><h3>🏥 Ward Attendants</h3><h1 style='color:#dc2626;'>{count6}</h1><p>Total Records (Sheet 6)</p></div>", unsafe_allow_html=True)
 
 def show_regular_staff():
     st.markdown("<br>", unsafe_allow_html=True)
@@ -173,7 +173,6 @@ def main():
     if not check_login():
         return
 
-    # User ke login hone ke baad ka UI
     col_a, col_b = st.columns([8, 1])
     with col_a:
         st.markdown(f"**Welcome, {st.session_state['current_user']}!**")
