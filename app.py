@@ -9,7 +9,6 @@ st.set_page_config(page_title="Hospital HR Portal", page_icon="🏢", layout="wi
 # 🛡️ STRICT ANTI-THEFT & ATTRACTIVE UI CSS
 st.markdown("""
     <style>
-        /* Hide Header, Footer, and Streamlit Menus */
         #MainMenu, footer, header {visibility: hidden !important;}
         [data-testid="stToolbar"], [data-testid="stElementToolbar"] {visibility: hidden !important; display: none !important;}
         
@@ -21,11 +20,9 @@ st.markdown("""
         }
         @media print { html, body { display: none !important; } }
 
-        /* Top Navigation Menu Styling */
         div.row-widget.stRadio > div { flex-direction: row; justify-content: center; background-color: #f8fafc; padding: 15px; border-radius: 12px; flex-wrap: wrap; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px rgba(0,0,0,0.05);}
         div.row-widget.stRadio > div > label { margin-right: 20px; padding: 8px 15px; cursor: pointer; font-size: 1.1rem !important; font-weight: bold; color: #1e293b;}
         
-        /* 🎨 THE MASSIVE GRADIENT WELCOME TEXT */
         .welcome-text { 
             font-size: 4.5rem; 
             font-weight: 900; 
@@ -109,10 +106,26 @@ def load_data_from_sheet(sheet_name):
 # ==========================================
 # 4. COLORFUL & ATTRACTIVE PAGE DESIGNS
 # ==========================================
+def style_table(df, color_hex):
+    """Table ke layout aur headers ko color karne ka engine"""
+    return df.style.set_properties(**{
+        'background-color': '#ffffff',
+        'color': '#0f172a',
+        'border-color': '#e2e8f0',
+        'border-style': 'solid',
+        'border-width': '1px',
+        'padding': '10px'
+    }).set_table_styles([{
+        'selector': 'th',
+        'props': [
+            ('background-color', color_hex), 
+            ('color', 'white'), 
+            ('font-size', '16px'), 
+            ('text-align', 'left')
+        ]
+    }])
+
 def render_smart_table(df, title, icon, color_hex):
-    """Har page ke liye ek dynamic aur colorful header theme"""
-    
-    # 🎨 Colorful Page Banner
     st.markdown(f"""
         <div style='background: linear-gradient(90deg, {color_hex}22, transparent); border-left: 6px solid {color_hex}; padding: 15px; border-radius: 8px; margin-bottom: 20px;'>
             <h2 style='color: {color_hex}; margin: 0; font-weight: 800;'>{icon} {title}</h2>
@@ -123,7 +136,6 @@ def render_smart_table(df, title, icon, color_hex):
         st.dataframe(df, use_container_width=True)
         return
         
-    # 🎨 Attractive Total Records Badge
     st.markdown(f"""
         <p style='font-size: 1.2rem; color: #334155; margin-bottom: 5px;'>
             <strong>Total Records Found:</strong> 
@@ -134,46 +146,42 @@ def render_smart_table(df, title, icon, color_hex):
     search_query = st.text_input(f"🔍 Search in {title}...", key=title)
     st.markdown("<br>", unsafe_allow_html=True)
     
+    # Apply filtering and 🎨 Colorful Styling
     if search_query:
         mask = df.astype(str).apply(lambda x: x.str.contains(search_query, case=False)).any(axis=1)
         filtered_df = df[mask]
-        st.dataframe(filtered_df, use_container_width=True, hide_index=False)
+        styled_df = style_table(filtered_df, color_hex)
+        st.dataframe(styled_df, use_container_width=True, hide_index=False)
     else:
-        st.dataframe(df, use_container_width=True, hide_index=False)
+        styled_df = style_table(df, color_hex)
+        st.dataframe(styled_df, use_container_width=True, hide_index=False)
 
 def show_home():
-    # 🎯 EXPERT FIX: Sirf ek bada, attractive, aur saaf Welcome message
     st.markdown("<div class='welcome-text'>WELCOME TO<br>CIVIL HOSPITAL BATHINDA</div>", unsafe_allow_html=True)
 
 def show_regular_staff():
     df = load_data_from_sheet("Sheet1")
-    # Blue Theme
-    render_smart_table(df, "Regular Staff Management", "🩺", "#2563eb")
+    render_smart_table(df, "Regular Staff Management", "🩺", "#2563eb") # Blue Theme
 
 def show_outsource_staff():
     df = load_data_from_sheet("Sheet2")
-    # Green Theme
-    render_smart_table(df, "Outsource Staff Management", "🤝", "#10b981")
+    render_smart_table(df, "Outsource Staff Management", "🤝", "#10b981") # Green Theme
 
 def show_regular_staff_detail():
     df = load_data_from_sheet("Sheet3")
-    # Purple Theme
-    render_smart_table(df, "Regular Staff Detailed Records", "📄", "#8b5cf6")
+    render_smart_table(df, "Regular Staff Detailed Records", "📄", "#8b5cf6") # Purple Theme
 
 def show_outsource_staff_detail():
     df = load_data_from_sheet("Sheet4")
-    # Orange Theme
-    render_smart_table(df, "Outsource Staff Detailed Records", "📋", "#f59e0b")
+    render_smart_table(df, "Outsource Staff Detailed Records", "📋", "#f59e0b") # Orange Theme
 
 def show_deputation_staff():
     df = load_data_from_sheet("Sheet5")
-    # Teal Theme
-    render_smart_table(df, "Deputation Staff Register", "🔄", "#14b8a6")
+    render_smart_table(df, "Deputation Staff Register", "🔄", "#14b8a6") # Teal Theme
 
 def show_ward_attendant_list():
     df = load_data_from_sheet("Sheet6")
-    # Red Theme
-    render_smart_table(df, "CH Ward Attendant List", "🏥", "#ef4444")
+    render_smart_table(df, "CH Ward Attendant List", "🏥", "#ef4444") # Red Theme
 
 # ==========================================
 # 5. MAIN NAVIGATION CONTROLLER
@@ -182,14 +190,12 @@ def main():
     if not check_login():
         return
 
-    # Top Mini Header with Logout
     col_a, col_b = st.columns([8, 1])
     with col_a:
         st.markdown(f"<p style='font-size: 1.1rem; color: #64748b; margin-top: 5px;'>Logged in as: <strong>{st.session_state['current_user']}</strong></p>", unsafe_allow_html=True)
     with col_b:
         st.button("🚪 Logout", on_click=logout)
 
-    # 🎯 Clean Radio Navigation
     selected_page = st.radio(
         "",  
         [
@@ -206,7 +212,6 @@ def main():
     
     st.markdown("<hr style='margin-top: 5px; margin-bottom: 20px;'>", unsafe_allow_html=True)
 
-    # Page Routing
     if selected_page == "🏠 Home":
         show_home()
     elif selected_page == "1️⃣ Regular Staff":
