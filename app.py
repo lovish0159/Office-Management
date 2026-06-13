@@ -21,25 +21,27 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. GOOGLE SHEETS DYNAMIC LOADER
+# 2. GOOGLE SHEETS DYNAMIC LOADER (DIRECT LINK METHOD)
 # ==========================================
 @st.cache_data(ttl=60)
 def load_data_from_sheet(sheet_name):
     """Specific sheet se data nikalne ka master function"""
+    # 👇 YAHAN APNI GOOGLE SHEET KA LINK PASTE KAREIN 👇
+    MASTER_SHEET_URL = "https://docs.google.com/spreadsheets/d/1FpDrz63M5Ix_rphXoonZHCDy_PAOUjsrzYIC3AFkUzo/edit?gid=0#gid=0"
+    
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
-        df = conn.read(worksheet=sheet_name)
+        # Ab system seedha is URL se data uthayega bina kisi secret key ke
+        df = conn.read(spreadsheet=MASTER_SHEET_URL, worksheet=sheet_name)
         df = df.dropna(how="all") # Clean empty rows
         
-        # Agar sheet mein data hai toh serial number theek karein
         if not df.empty:
             df = df.reset_index(drop=True)
             df.index = df.index + 1
             
         return df
     except Exception as e:
-        # Agar koi specific sheet google sheets mein nahi bani hai
-        return pd.DataFrame({"System Alert": [f"⚠️ {sheet_name} not found or empty. Please create it in Google Sheets."]})
+        return pd.DataFrame({"System Alert": [f"⚠️ Error: Ya toh '{sheet_name}' tab sheet mein nahi hai, ya URL galat hai."]})
 
 # ==========================================
 # 3. PAGE CONTENT FUNCTIONS
