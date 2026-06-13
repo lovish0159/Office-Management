@@ -63,8 +63,8 @@ def check_login():
             if submit_button:
                 try:
                     # 🎯 FETCHING CREDENTIALS FROM STREAMLIT SECRETS
-                    SECRET_USER = st.secrets["admin_username"]
-                    SECRET_PASS = st.secrets["admin_password"]
+                    SECRET_USER = st.secrets["ADMIN_USERNAME"]
+                    SECRET_PASS = st.secrets["ADMIN_PASSWORD"]
                     
                     if input_username == SECRET_USER and input_password == SECRET_PASS:
                         st.session_state["logged_in"] = True
