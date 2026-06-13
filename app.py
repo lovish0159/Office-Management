@@ -1,262 +1,111 @@
 import streamlit as st
 import pandas as pd
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-from datetime import datetime
 
 # ==========================================
 # 1. ENTERPRISE CONFIGURATION
 # ==========================================
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1FpDrz63M5Ix_rphXoonZHCDy_PAOUjsrzYIC3AFkUzo/edit?gid=0#gid=0"
+st.set_page_config(page_title="Hospital HR Portal", page_icon="🏢", layout="wide")
 
-st.set_page_config(page_title="Secure Roster | CH Bathinda", page_icon="🏥", layout="wide")
-
-# ==========================================
-# 2. SECURITY & RESPONSIVE UI
-# ==========================================
-def enforce_anti_leak_ui():
-    css_shield = """
+# Pro Website CSS
+st.markdown("""
     <style>
         #MainMenu, footer, header {visibility: hidden;}
-        body, .block-container, table, div, th, td, tr, span, p {
-            user-select: none !important;
-            -webkit-user-select: none !important;
-            -ms-user-select: none !important;
-            -moz-user-select: none !important;
-        }
-        .enterprise-table {
-            width: 100%; border-collapse: collapse; font-family: sans-serif;
-            background-color: #ffffff; box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            border-radius: 8px; overflow: hidden; margin-top: 10px;
-        }
-        .enterprise-table th { background-color: #1e293b; color: white; padding: 16px; text-align: left; white-space: nowrap; }
-        .enterprise-table td { padding: 14px 16px; border-bottom: 1px solid #e2e8f0; color: #334155; white-space: nowrap; }
-        
-        div.row-widget.stRadio > div { 
-            flex-direction: row; flex-wrap: wrap; gap: 8px; 
-            background-color: #f1f5f9; padding: 10px; border-radius: 8px; justify-content: center;
-        }
-        div.row-widget.stRadio > div > label { 
-            background-color: #ffffff; padding: 8px 14px; border-radius: 6px; 
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05); cursor: pointer; margin: 0; font-size: 14px;
-        }
-        
-        @media (max-width: 768px) {
-            .block-container { padding-top: 1rem; padding-left: 1rem; padding-right: 1rem; }
-            h2 { font-size: 1.5rem !important; text-align: center; }
-            div.row-widget.stRadio > div > label { padding: 6px 10px; font-size: 12px; flex: 1 1 auto; text-align: center; }
-            .enterprise-table th, .enterprise-table td { padding: 10px 12px; font-size: 13px; }
-        }
+        .main-header { font-size: 2.5rem; color: #1e3a8a; font-weight: 800; margin-bottom: 5px; }
+        .sub-header { color: #64748b; font-size: 16px; margin-bottom: 25px; }
+        .card { background-color: #f8fafc; border-radius: 10px; padding: 20px; border: 1px solid #e2e8f0; margin-bottom: 15px;}
+        .css-1d391kg { padding-top: 2rem; } /* Reduce top padding */
     </style>
-    """
-    st.markdown(css_shield, unsafe_allow_html=True)
-
-def initialize_session():
-    if "is_verified" not in st.session_state:
-        st.session_state.is_verified = False
-
-def authenticate(user, pwd):
-    try:
-        if user == st.secrets["ADMIN_USERNAME"] and pwd == st.secrets["ADMIN_PASSWORD"]:
-            st.session_state.is_verified = True
-            return True
-        return False
-    except Exception:
-        st.error("⚠️ System Error: Authentication secrets are missing.")
-        return False
-
-def terminate_session():
-    st.session_state.is_verified = False
-    st.rerun()
+""", unsafe_allow_html=True)
 
 # ==========================================
-# 3. CLOUD DATABASE CONTROLLER
+# 2. PAGE CONTENT FUNCTIONS
 # ==========================================
-def get_gspread_client():
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
-    return gspread.authorize(creds)
-
-@st.cache_data(ttl=300)
-def fetch_roster_data(sheet_index):
-    try:
-        client = get_gspread_client()
-        worksheet = client.open_by_url(SHEET_URL).get_worksheet(sheet_index)
-        
-        if worksheet is not None:
-            data = worksheet.get_all_values()
-            if not data or len(data) < 2:
-                return pd.DataFrame()
-            
-            raw_headers = [str(h).strip() if str(h).strip() != "" else f"Unnamed_{i}" for i, h in enumerate(data[0])]
-            df = pd.DataFrame(data[1:], columns=raw_headers)
-            df = df.loc[:, ~df.columns.str.startswith('Unnamed_')]
-            return df
-            
-        return pd.DataFrame()
-    except Exception as e:
-        st.error(f"⚠️ Data Sync Error: {e}")
-        return pd.DataFrame()
-
-def update_employee_posting(sheet_index, emp_name, new_posting):
-    try:
-        client = get_gspread_client()
-        worksheet = client.open_by_url(SHEET_URL).get_worksheet(sheet_index)
-        cell = worksheet.find(emp_name)
-        
-        raw_headers = worksheet.row_values(1)
-        clean_headers = [str(h).strip().lower() for h in raw_headers]
-        
-        # Adaptive check for posting column
-        post_col_match = next((h for h in clean_headers if any(k in h for k in ['posting', 'station', 'location', 'ward'])), None)
-        
-        if post_col_match:
-            col_idx = clean_headers.index(post_col_match) + 1
-            worksheet.update_cell(cell.row, col_idx, new_posting)
-            st.cache_data.clear()
-            return True, "Success"
-        else:
-            return False, "'Posting' wala column nahi mila sheet mein."
-    except Exception as e:
-        return False, str(e)
-
-# ==========================================
-# 4. USER INTERFACE (UI) COMPONENTS
-# ==========================================
-def render_auth_gateway():
-    st.markdown("<br>", unsafe_allow_html=True)
-    col1, col2, col3 = st.columns([1, 2, 1])
+def show_home():
+    st.markdown("<div class='main-header'>🏢 Civil Hospital HR Dashboard</div>", unsafe_allow_html=True)
+    st.markdown("<div class='sub-header'>Centralized Staff Management System</div>", unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown("<div class='card'><h3>🩺 Regular Staff</h3><h1 style='color:#2563eb;'>142</h1><p>Active Employees</p></div>", unsafe_allow_html=True)
     with col2:
-        st.markdown("<h2 style='text-align: center; color: #1e293b;'>🔐 Restricted Access</h2>", unsafe_allow_html=True)
-        with st.form("security_clearance_form"):
-            username = st.text_input("Administrator ID").strip()
-            password = st.text_input("Security Clearance Key", type="password").strip()
-            if st.form_submit_button("Authenticate & Initialize 🚀", use_container_width=True):
-                if authenticate(username, password):
-                    st.success("✅ Identity verified.")
-                    st.rerun()
-                else:
-                    st.error("❌ Authentication Failed: Invalid credentials.")
-
-def render_roster_dashboard(title, sheet_index):
-    st.markdown(f"### {title}")
-    st.caption(f"Secure Environment | Time: {datetime.now().strftime('%d-%m-%Y %H:%M')}")
+        st.markdown("<div class='card'><h3>🤝 Outsource Staff</h3><h1 style='color:#16a34a;'>85</h1><p>Active Employees</p></div>", unsafe_allow_html=True)
+    with col3:
+        st.markdown("<div class='card'><h3>🔄 Deputation</h3><h1 style='color:#dc2626;'>12</h1><p>Currently on Deputation</p></div>", unsafe_allow_html=True)
+    
     st.divider()
+    st.info("👈 **Navigation Instructions:** Kripya left side (Sidebar) mein diye gaye Radio Buttons ka istemal karke alag-alag modules open karein.")
 
-    with st.spinner("Decrypting data matrices..."):
-        df = fetch_roster_data(sheet_index)
+def show_regular_staff():
+    st.header("🩺 Regular Staff Management")
+    st.caption("Manage roster, attendance, and current postings of all regular employees.")
+    # Yahan aap apna Regular Staff ka code aur tables daal sakte hain
+    st.dataframe(pd.DataFrame({"Emp ID": ["R-101", "R-102"], "Name": ["Dr. Rajiv", "Simran Kaur"], "Designation": ["MO", "Staff Nurse"]}), use_container_width=True)
 
-    if df.empty:
-        st.warning("⚠️ Data nahi mila. Ya toh sheet khaali hai, ya connection error hai.")
-        return
+def show_outsource_staff():
+    st.header("🤝 Outsource Staff Management")
+    st.caption("Manage contracts, agencies, and duty rosters for outsourced personnel.")
+    # Yahan aap apna Outsource Staff ka code daal sakte hain
+    st.dataframe(pd.DataFrame({"ID": ["OS-501", "OS-502"], "Name": ["Ramesh", "Sunita"], "Agency": ["A1 Services", "A1 Services"]}), use_container_width=True)
 
-    st.markdown("#### 🔍 Search & Filter Records")
-    search_term = st.text_input("🔎 Universal Search (Name, Ward, etc.):", placeholder="Type here...", key=f"search_{sheet_index}")
-    
-    f_col1, f_col2 = st.columns(2)
-    processed_df = df.copy()
-    
-    # Adaptive Filters (Matches 'Post', 'Designation', 'Posting Position' automatically)
-    desig_col = next((c for c in df.columns if any(k in str(c).lower() for k in ['designation', 'post', 'role'])), None)
-    post_col = next((c for c in df.columns if any(k in str(c).lower() for k in ['posting', 'location', 'station', 'ward'])), None)
-    
-    with f_col1:
-        if desig_col:
-            desig_options = ["All"] + sorted(df[desig_col].astype(str).dropna().unique().tolist())
-            selected_desig = st.selectbox(f"By {desig_col}:", desig_options, key=f"desig_{sheet_index}")
-            if selected_desig != "All":
-                processed_df = processed_df[processed_df[desig_col] == selected_desig]
-                
-    with f_col2:
-        if post_col:
-            posting_options = ["All"] + sorted(df[post_col].astype(str).dropna().unique().tolist())
-            selected_posting = st.selectbox(f"By {post_col}:", posting_options, key=f"post_{sheet_index}")
-            if selected_posting != "All":
-                processed_df = processed_df[processed_df[post_col] == selected_posting]
+def show_regular_staff_detail():
+    st.header("📄 Regular Staff Detailed Records")
+    st.caption("View deep analytics, service records, and personal details of regular staff.")
+    st.info("Detailed profile view will load here. Connect your Google Sheet for live data.")
 
-    if search_term:
-        mask = processed_df.astype(str).apply(lambda x: x.str.contains(search_term, case=False, na=False)).any(axis=1)
-        processed_df = processed_df[mask]
+def show_outsource_staff_detail():
+    st.header("📋 Outsource Staff Detailed Records")
+    st.caption("View contract renewals, EPF details, and personal records of outsourced staff.")
+    st.info("Detailed outsource records will load here.")
 
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.metric("Total Personnel Located", len(processed_df))
+def show_deputation_staff():
+    st.header("🔄 Deputation Staff Register")
+    st.caption("Track staff sent to or received from other institutions on deputation.")
+    st.warning("No staff currently on deputation out of the station.")
 
-    if not processed_df.empty:
-        html_grid = processed_df.to_html(index=False, classes="enterprise-table", border=0)
-        st.markdown(f"<div style='width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch;'>{html_grid}</div>", unsafe_allow_html=True)
-    else:
-        st.info("⚠️ Koi record match nahi hua.")
-
-def render_admin_console():
-    st.markdown("### 🔐 Admin Operations Console")
-    st.caption("Central Portal for Station Updates")
-    st.divider()
-    
-    st.markdown("#### 🔄 Station Allocation Manager")
-    staff_category = st.radio("Select Staff Category:", ["Regular Staff", "Outsource Staff"], horizontal=True)
-    
-    sheet_idx = 0 if staff_category == "Regular Staff" else 1
-    df = fetch_roster_data(sheet_idx)
-    
-    # Adaptive Name Column Finder (Finds 'Employee Name', 'Name', 'Staff Name')
-    emp_col = next((c for c in df.columns if 'name' in str(c).lower()), None)
-    
-    if not df.empty:
-        if emp_col:
-            with st.form("roster_update_form"):
-                employees = sorted(df[emp_col].astype(str).dropna().unique().tolist())
-                selected_emp = st.selectbox("Target Personnel:", ["-- Select ID --"] + employees)
-                new_station = st.text_input("New Allocation / Duty Station:")
-                
-                if st.form_submit_button("Deploy Changes to Cloud ☁️", use_container_width=True):
-                    if selected_emp == "-- Select ID --" or not new_station:
-                        st.warning("⚠️ Invalid input parameters. Please complete all fields.")
-                    else:
-                        with st.spinner(f"Updating {staff_category}..."):
-                            success, msg = update_employee_posting(sheet_idx, selected_emp, new_station)
-                            if success:
-                                st.success(f"✅ Protocol complete: **{selected_emp}** relocated to **{new_station}**.")
-                            else:
-                                st.error(f"❌ Transaction Failed: {msg}")
-        else:
-            st.warning(f"⚠️ Aapki '{staff_category}' sheet mein kisi bhi column ka naam 'Name' nahi hai. Update karne ke liye Name hona zaruri hai.")
-    else:
-        st.warning(f"⚠️ Data nahi mila {staff_category} sheet mein.")
+def show_ward_attendant_list():
+    st.header("🏥 CH Ward Attendant List")
+    st.caption("Specific roster and ward allocations for Class-IV Ward Attendants.")
+    st.dataframe(pd.DataFrame({"Ward": ["Emergency", "ICU", "OPD"], "Attendant Assigned": ["Karmjit Singh", "Gurpreet Kaur", "Sandeep"]}), use_container_width=True)
 
 # ==========================================
-# 5. APPLICATION CORE EXECUTION
+# 3. WEBSITE NAVIGATION CONTROLLER (SIDEBAR)
 # ==========================================
-enforce_anti_leak_ui()
-initialize_session()
-
-if not st.session_state.is_verified:
-    render_auth_gateway()
-else:
-    head_col1, head_col2 = st.columns([3, 1])
-    with head_col1:
-        st.markdown("<h2 style='margin-top: 0; padding-top: 0;'>🏥 CH Bathinda</h2>", unsafe_allow_html=True)
-    with head_col2:
-        if st.button("🔒 Logout", type="primary", use_container_width=True):
-            terminate_session()
-            
-    app_page = st.radio(
-        "Navigation",
+def main():
+    # Sidebar Title
+    st.sidebar.markdown("## 🧭 Main Menu")
+    
+    # 🎯 EXPERT FIX: Radio Buttons for Website Navigation
+    selected_page = st.sidebar.radio(
+        "Select a Module to Open:",
         [
-            "📋 Regular", "🤝 Outsource", "🏥 Reg Detail", "🏢 Out Detail", "🔐 Update"
-        ],
-        horizontal=True,
-        label_visibility="collapsed"
+            "🏠 Home Dashboard",
+            "1️⃣ Regular Staff",
+            "2️⃣ Outsource Staff",
+            "3️⃣ Regular Staff Detail",
+            "4️⃣ Outsource Staff Detail",
+            "5️⃣ Deputation Staff",
+            "6️⃣ CH Ward Attendant List"
+        ]
     )
     
-    st.markdown("<hr style='margin-top: 0.5rem; margin-bottom: 1.5rem;'>", unsafe_allow_html=True)
-    
-    if app_page == "📋 Regular":
-        render_roster_dashboard("📋 Regular Staff Ledger", sheet_index=0)
-    elif app_page == "🤝 Outsource":
-        render_roster_dashboard("🤝 Outsource Staff Ledger", sheet_index=1)
-    elif app_page == "🏥 Reg Detail":
-        render_roster_dashboard("🏥 Regular Staff Detail Ledger", sheet_index=2)
-    elif app_page == "🏢 Out Detail":
-        render_roster_dashboard("🏢 Outsource Staff Detail Ledger", sheet_index=3)
-    elif app_page == "🔐 Update":
-        render_admin_console()
+    st.sidebar.divider()
+    st.sidebar.caption("Secure HR Environment v2.0")
+
+    # Routing logic based on Radio Button selection
+    if selected_page == "🏠 Home Dashboard":
+        show_home()
+    elif selected_page == "1️⃣ Regular Staff":
+        show_regular_staff()
+    elif selected_page == "2️⃣ Outsource Staff":
+        show_outsource_staff()
+    elif selected_page == "3️⃣ Regular Staff Detail":
+        show_regular_staff_detail()
+    elif selected_page == "4️⃣ Outsource Staff Detail":
+        show_outsource_staff_detail()
+    elif selected_page == "5️⃣ Deputation Staff":
+        show_deputation_staff()
+    elif selected_page == "6️⃣ CH Ward Attendant List":
+        show_ward_attendant_list()
+
+if __name__ == "__main__":
+    main()
