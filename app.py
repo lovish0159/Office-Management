@@ -21,56 +21,23 @@ st.markdown("""
         }
         @media print { html, body { display: none !important; } }
 
-        /* PROFESSIONAL BIG FONT UI STYLING */
-        .main-header { font-size: 3rem; color: #1e3a8a; font-weight: 900; margin-bottom: 0px; text-align: center; letter-spacing: 1px;}
-        .sub-header { color: #475569; font-size: 1.5rem; margin-bottom: 30px; text-align: center; font-weight: 500;}
-        
-        /* Top Navigation Menu Styling (Bigger Fonts) */
+        /* Top Navigation Menu Styling */
         div.row-widget.stRadio > div { flex-direction: row; justify-content: center; background-color: #f8fafc; padding: 15px; border-radius: 12px; flex-wrap: wrap; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px rgba(0,0,0,0.05);}
-        div.row-widget.stRadio > div > label { margin-right: 20px; padding: 8px 15px; cursor: pointer; font-size: 1.2rem !important; font-weight: bold; color: #1e293b;}
+        div.row-widget.stRadio > div > label { margin-right: 20px; padding: 8px 15px; cursor: pointer; font-size: 1.1rem !important; font-weight: bold; color: #1e293b;}
         
-        /* Welcome Text Styling */
-        .welcome-text { font-size: 4.5rem; color: #0f172a; font-weight: 900; text-align: center; margin-top: 5vh; letter-spacing: 2px;}
-        
-        /* 🎨 ATTRACTIVE GOOGLE SHEET BUTTON */
-        .gsheet-btn {
-            display: inline-block;
-            background: linear-gradient(135deg, #10b981, #059669); /* Bright Green Gradient */
-            color: #ffffff !important;
-            padding: 12px 25px;
-            border-radius: 50px;
-            text-decoration: none;
-            font-weight: 800;
-            font-size: 1.2rem;
-            margin-top: 20px;
-            margin-bottom: 30px;
-            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
-            transition: all 0.3s ease;
-            text-align: center;
-        }
-        .gsheet-btn:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.6);
-            background: linear-gradient(135deg, #059669, #047857);
-        }
-
-        /* 🎨 ATTRACTIVE CARDS */
-        .card { 
-            background: linear-gradient(to bottom right, #ffffff, #f1f5f9); 
-            border-radius: 15px; 
-            padding: 25px; 
-            border-left: 5px solid #2563eb; 
-            margin-bottom: 15px; 
+        /* 🎨 THE MASSIVE GRADIENT WELCOME TEXT */
+        .welcome-text { 
+            font-size: 4.5rem; 
+            font-weight: 900; 
             text-align: center; 
-            box-shadow: 0 4px 10px rgba(0,0,0,0.08);
-            transition: 0.3s;
+            margin-top: 15vh; 
+            letter-spacing: 2px;
+            background: linear-gradient(45deg, #1e3a8a, #10b981);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+            line-height: 1.2;
         }
-        .card:hover { transform: translateY(-5px); box-shadow: 0 8px 15px rgba(0,0,0,0.12); }
-        .card.green-border { border-left: 5px solid #10b981; }
-        .card.red-border { border-left: 5px solid #ef4444; }
-        
-        /* Table Search Header */
-        .table-title { font-size: 1.8rem; color: #1e3a8a; font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;}
     </style>
 """, unsafe_allow_html=True)
 
@@ -88,8 +55,8 @@ def check_login():
     col1, col2, col3 = st.columns([1, 1.5, 1])
     
     with col2:
-        st.markdown("<div class='main-header'>🏢 Secure HR Portal</div>", unsafe_allow_html=True)
-        st.markdown("<div class='sub-header'>Civil Hospital Establishment Access</div>", unsafe_allow_html=True)
+        st.markdown("<h1 style='text-align: center; color: #1e3a8a;'>🏢 Secure HR Portal</h1>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: #64748b;'>Civil Hospital Establishment Access</p>", unsafe_allow_html=True)
         
         with st.form("login_form"):
             st.markdown("<h3 style='font-size: 1.5rem;'>🔐 Admin Login</h3>", unsafe_allow_html=True)
@@ -140,18 +107,31 @@ def load_data_from_sheet(sheet_name):
         return pd.DataFrame({"System Alert": [f"⚠️ Error: Data for '{sheet_name}' is unavailable."]})
 
 # ==========================================
-# 4. ADVANCED PAGE DESIGNS (WITH SEARCH)
+# 4. COLORFUL & ATTRACTIVE PAGE DESIGNS
 # ==========================================
-def render_smart_table(df, title):
-    st.markdown(f"<div class='table-title'>{title}</div>", unsafe_allow_html=True)
+def render_smart_table(df, title, icon, color_hex):
+    """Har page ke liye ek dynamic aur colorful header theme"""
+    
+    # 🎨 Colorful Page Banner
+    st.markdown(f"""
+        <div style='background: linear-gradient(90deg, {color_hex}22, transparent); border-left: 6px solid {color_hex}; padding: 15px; border-radius: 8px; margin-bottom: 20px;'>
+            <h2 style='color: {color_hex}; margin: 0; font-weight: 800;'>{icon} {title}</h2>
+        </div>
+    """, unsafe_allow_html=True)
     
     if "System Alert" in df.columns or df.empty:
         st.dataframe(df, use_container_width=True)
         return
         
-    st.markdown(f"<p style='font-size: 1.2rem; color: #334155;'><strong>Total Records Found:</strong> {len(df)}</p>", unsafe_allow_html=True)
-    search_query = st.text_input("🔍 Search (Type name, ID, or any detail...)", "")
+    # 🎨 Attractive Total Records Badge
+    st.markdown(f"""
+        <p style='font-size: 1.2rem; color: #334155; margin-bottom: 5px;'>
+            <strong>Total Records Found:</strong> 
+            <span style='background-color: {color_hex}; color: white; padding: 4px 12px; border-radius: 20px; font-weight: bold;'>{len(df)}</span>
+        </p>
+    """, unsafe_allow_html=True)
     
+    search_query = st.text_input(f"🔍 Search in {title}...", key=title)
     st.markdown("<br>", unsafe_allow_html=True)
     
     if search_query:
@@ -162,67 +142,38 @@ def render_smart_table(df, title):
         st.dataframe(df, use_container_width=True, hide_index=False)
 
 def show_home():
-    # 🎯 EXPERT FIX: Welcome Text & Colorful Live Google Sheet Button
-    st.markdown("<div class='welcome-text'>WELCOME</div>", unsafe_allow_html=True)
-    st.markdown("<div class='sub-header'>Civil Hospital HR Management Portal</div>", unsafe_allow_html=True)
-    
-    # The Colorful Button
-    col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 1])
-    with col_btn2:
-        st.markdown(
-            """
-            <div style="text-align: center;">
-                <a href="https://docs.google.com/spreadsheets/d/1FpDrz63M5Ix_rphXoonZHCDy_PAOUjsrzYIC3AFkUzo/edit" target="_blank" class="gsheet-btn">
-                    📊 OPEN LIVE GOOGLE SHEET
-                </a>
-            </div>
-            """, 
-            unsafe_allow_html=True
-        )
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # 🎯 EXPERT FIX: Attractive Data Cards
-    with st.spinner("Fetching live data from Google Sheets..."):
-        df1 = load_data_from_sheet("Sheet1")
-        df2 = load_data_from_sheet("Sheet2")
-        df6 = load_data_from_sheet("Sheet6")
-        
-        count1 = 0 if "System Alert" in df1.columns else len(df1)
-        count2 = 0 if "System Alert" in df2.columns else len(df2)
-        count6 = 0 if "System Alert" in df6.columns else len(df6)
-
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown(f"<div class='card'><h3>🩺 Regular Staff</h3><h1 style='color:#2563eb; font-size: 3rem; margin: 10px 0;'>{count1}</h1><p style='color:#475569; font-weight:bold;'>Records in Sheet 1</p></div>", unsafe_allow_html=True)
-    with col2:
-        st.markdown(f"<div class='card green-border'><h3>🤝 Outsource Staff</h3><h1 style='color:#10b981; font-size: 3rem; margin: 10px 0;'>{count2}</h1><p style='color:#475569; font-weight:bold;'>Records in Sheet 2</p></div>", unsafe_allow_html=True)
-    with col3:
-        st.markdown(f"<div class='card red-border'><h3>🏥 Ward Attendants</h3><h1 style='color:#ef4444; font-size: 3rem; margin: 10px 0;'>{count6}</h1><p style='color:#475569; font-weight:bold;'>Records in Sheet 6</p></div>", unsafe_allow_html=True)
+    # 🎯 EXPERT FIX: Sirf ek bada, attractive, aur saaf Welcome message
+    st.markdown("<div class='welcome-text'>WELCOME TO<br>CIVIL HOSPITAL BATHINDA</div>", unsafe_allow_html=True)
 
 def show_regular_staff():
     df = load_data_from_sheet("Sheet1")
-    render_smart_table(df, "🩺 Regular Staff Management")
+    # Blue Theme
+    render_smart_table(df, "Regular Staff Management", "🩺", "#2563eb")
 
 def show_outsource_staff():
     df = load_data_from_sheet("Sheet2")
-    render_smart_table(df, "🤝 Outsource Staff Management")
+    # Green Theme
+    render_smart_table(df, "Outsource Staff Management", "🤝", "#10b981")
 
 def show_regular_staff_detail():
     df = load_data_from_sheet("Sheet3")
-    render_smart_table(df, "📄 Regular Staff Detailed Records")
+    # Purple Theme
+    render_smart_table(df, "Regular Staff Detailed Records", "📄", "#8b5cf6")
 
 def show_outsource_staff_detail():
     df = load_data_from_sheet("Sheet4")
-    render_smart_table(df, "📋 Outsource Staff Detailed Records")
+    # Orange Theme
+    render_smart_table(df, "Outsource Staff Detailed Records", "📋", "#f59e0b")
 
 def show_deputation_staff():
     df = load_data_from_sheet("Sheet5")
-    render_smart_table(df, "🔄 Deputation Staff Register")
+    # Teal Theme
+    render_smart_table(df, "Deputation Staff Register", "🔄", "#14b8a6")
 
 def show_ward_attendant_list():
     df = load_data_from_sheet("Sheet6")
-    render_smart_table(df, "🏥 CH Ward Attendant List")
+    # Red Theme
+    render_smart_table(df, "CH Ward Attendant List", "🏥", "#ef4444")
 
 # ==========================================
 # 5. MAIN NAVIGATION CONTROLLER
@@ -231,15 +182,14 @@ def main():
     if not check_login():
         return
 
+    # Top Mini Header with Logout
     col_a, col_b = st.columns([8, 1])
     with col_a:
-        st.markdown(f"<p style='font-size: 1.2rem; color: #1e3a8a;'><strong>Welcome, {st.session_state['current_user']}!</strong></p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='font-size: 1.1rem; color: #64748b; margin-top: 5px;'>Logged in as: <strong>{st.session_state['current_user']}</strong></p>", unsafe_allow_html=True)
     with col_b:
         st.button("🚪 Logout", on_click=logout)
 
-    st.markdown("<div class='main-header'>🏢 Civil Hospital HR Dashboard</div>", unsafe_allow_html=True)
-    st.markdown("<br>", unsafe_allow_html=True)
-    
+    # 🎯 Clean Radio Navigation
     selected_page = st.radio(
         "",  
         [
@@ -254,8 +204,9 @@ def main():
         horizontal=True  
     )
     
-    st.divider()
+    st.markdown("<hr style='margin-top: 5px; margin-bottom: 20px;'>", unsafe_allow_html=True)
 
+    # Page Routing
     if selected_page == "🏠 Home":
         show_home()
     elif selected_page == "1️⃣ Regular Staff":
