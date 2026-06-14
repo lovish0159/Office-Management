@@ -109,9 +109,7 @@ def main():
     if not check_login(): return
 
     st.button("🚪 Logout", on_click=lambda: st.session_state.update({"logged_in": False}))
-    st.markdown("<div class='main-header'>🏢 Civil Hospital HR Dashboard</div>", unsafe_allow_html=True)
     
-    # 🎯 EXPERT FIX: Added 7th Page in Navigation
     page = st.radio(
         "", 
         [
@@ -128,13 +126,15 @@ def main():
     )
     st.divider()
 
+    # 🎯 EXPERT FIX: Clean and Beautiful Home Page
     if page == "🏠 Home":
-        col1, col2, col3 = st.columns(3)
-        with col1: st.markdown("<div style='text-align: cener; width: 100%'><h3>🩺 WELCOME TO 🩺 CIVIL HOSPITAL🏥 BATHINDA</h3></div>", unsafe_allow_html=True)
-        #with col2: st.markdown("<div class='card'><h3>🤝 CIVIL HOSPITAL</h3></div>", unsafe_allow_html=True)
-        #with col3: st.markdown("<div class='card'><h3>🏥 BATHINDA</h3></div>", unsafe_allow_html=True)
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.markdown("<h1 style='text-align: center; color: #1e3a8a; font-size: 3.5rem; font-weight: 900;'>🏥 Welcome to Civil Hospital Bathinda</h1>", unsafe_allow_html=True)
+        st.markdown("<h3 style='text-align: center; color: #64748b;'>Establishment & HR Management System</h3>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: #94a3b8; margin-top: 20px;'>Please select a module from the top navigation menu to proceed.</p>", unsafe_allow_html=True)
+        
     else:
-        # 🎯 EXPERT FIX: Mapped 7th Page to Sheet7
+        st.markdown("<div class='main-header'>🏢 Civil Hospital HR Dashboard</div>", unsafe_allow_html=True)
         sheet_map = {
             "1️⃣ Regular Staff": "Sheet1", 
             "2️⃣ Outsource Staff": "Sheet2", 
