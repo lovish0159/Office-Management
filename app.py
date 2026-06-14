@@ -32,7 +32,6 @@ def check_login():
             user = st.text_input("👤 Username")
             pwd = st.text_input("🔑 Password", type="password")
             if st.form_submit_button("Secure Login", use_container_width=True):
-                # 🎯 Password yahan code mein nahi, Streamlit Secrets se aayega
                 if user == st.secrets["ADMIN_USERNAME"] and pwd == st.secrets["ADMIN_PASSWORD"]:
                     st.session_state["logged_in"] = True
                     st.session_state["current_user"] = user
@@ -42,7 +41,7 @@ def check_login():
     return False
 
 # ==========================================
-# 3. GOOGLE SHEETS LOADER
+# 3. GOOGLE SHEETS LOADER (With .0 Decimal Fix)
 # ==========================================
 @st.cache_data(ttl=60)
 def load_data_from_sheet(sheet_name):
@@ -50,8 +49,18 @@ def load_data_from_sheet(sheet_name):
     csv_url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
     try:
         df = pd.read_csv(csv_url).dropna(how="all")
-        return df.reset_index(drop=True)
-    except: return pd.DataFrame({"Alert": ["Error loading sheet"]})
+        df = df.reset_index(drop=True)
+        
+        # 🎯 FIX: Automatically remove .0 from Mobile Numbers and Emp Codes
+        for col in df.columns:
+            if df[col].dtype == 'float64':
+                # Check if all numbers in the column are whole numbers
+                if df[col].dropna().apply(lambda x: x.is_integer()).all():
+                    # Convert to integer, then string, and remove <NA> values
+                    df[col] = df[col].astype('Int64').astype(str).replace('<NA>', '')
+        return df
+    except: 
+        return pd.DataFrame({"Alert": ["Error loading sheet"]})
 
 def render_smart_table(df, title):
     search = st.text_input(f"🔍 Search in {title}:", "")
@@ -64,7 +73,15 @@ def render_smart_table(df, title):
         if v in ["PRESENT", "ACTIVE", "REGULAR"]: return "color: white; background-color: #22c55e; font-weight: bold;"
         return ""
     
+    # Apply text styles
     styled_df = display_df.style.map(color_coding) if hasattr(display_df.style, 'map') else display_df.style.applymap(color_coding)
+    
+    # 🎯 FIX: Black Header with White Font
+    styled_df = styled_df.set_table_styles([
+        {'selector': 'th.col_heading', 'props': [('background-color', 'black !important'), ('color', 'white !important'), ('font-weight', 'bold !important')]},
+        {'selector': 'th.row_heading', 'props': [('background-color', 'black !important'), ('color', 'white !important')]}
+    ])
+    
     st.dataframe(styled_df, use_container_width=True)
 
 # ==========================================
