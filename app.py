@@ -6,20 +6,32 @@ import pandas as pd
 # ==========================================
 st.set_page_config(page_title="Hospital HR Portal", page_icon="🏢", layout="wide")
 
-# 🛡️ ANTI-THEFT & RESPONSIVE UI SHIELD
+# 🛡️ ANTI-THEFT, RESPONSIVE UI & HEADER SHIELD
 st.markdown("""
     <style>
+        /* Security & UI Hiding */
         #MainMenu, footer, header {visibility: hidden !important;}
         [data-testid="stToolbar"], [data-testid="stElementToolbar"] {visibility: hidden !important; display: none !important;}
+        
+        /* Anti-Copy */
         * { -webkit-user-select: none !important; -moz-user-select: none !important; user-select: none !important; }
+        
+        /* Main Typography */
         .main-header { font-size: 2.5rem; color: #1e3a8a; font-weight: 800; text-align: center;}
         .card { background-color: #f8fafc; border-radius: 10px; padding: 20px; border: 1px solid #e2e8f0; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);}
         div.row-widget.stRadio > div { flex-direction: row; justify-content: center; background-color: #f1f5f9; padding: 10px; border-radius: 10px; flex-wrap: wrap;}
+        
+        /* 🎯 EXPERT FIX: Force Streamlit Native Headers to Black & White */
+        [data-testid="stDataFrame"] th {
+            background-color: #0f172a !important;
+            color: #ffffff !important;
+            font-weight: 700 !important;
+        }
     </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. SECURE AUTHENTICATION (Using Streamlit Secrets)
+# 2. SECURE AUTHENTICATION
 # ==========================================
 def check_login():
     if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
@@ -32,16 +44,19 @@ def check_login():
             user = st.text_input("👤 Username")
             pwd = st.text_input("🔑 Password", type="password")
             if st.form_submit_button("Secure Login", use_container_width=True):
-                if user == st.secrets["ADMIN_USERNAME"] and pwd == st.secrets["ADMIN_PASSWORD"]:
-                    st.session_state["logged_in"] = True
-                    st.session_state["current_user"] = user
-                    st.rerun()
-                else:
-                    st.error("❌ Invalid Username or Password")
+                try:
+                    if user == st.secrets["ADMIN_USERNAME"] and pwd == st.secrets["ADMIN_PASSWORD"]:
+                        st.session_state["logged_in"] = True
+                        st.session_state["current_user"] = user
+                        st.rerun()
+                    else:
+                        st.error("❌ Invalid Username or Password")
+                except KeyError:
+                    st.error("⚠️ Streamlit Secrets set nahi hain. Settings check karein.")
     return False
 
 # ==========================================
-# 3. GOOGLE SHEETS LOADER (With .0 Decimal Fix)
+# 3. BULLETPROOF GOOGLE SHEETS LOADER
 # ==========================================
 @st.cache_data(ttl=60)
 def load_data_from_sheet(sheet_name):
@@ -51,20 +66,27 @@ def load_data_from_sheet(sheet_name):
         df = pd.read_csv(csv_url).dropna(how="all")
         df = df.reset_index(drop=True)
         
-        # 🎯 FIX: Automatically remove .0 from Mobile Numbers and Emp Codes
+        # 🎯 EXPERT FIX: Safe Float/Decimal removal (Handles empty cells and large numbers safely)
         for col in df.columns:
-            if df[col].dtype == 'float64':
-                # Check if all numbers in the column are whole numbers
-                if df[col].dropna().apply(lambda x: x.is_integer()).all():
-                    # Convert to integer, then string, and remove <NA> values
+            if pd.api.types.is_numeric_dtype(df[col]):
+                # Agar column ke saare non-empty numbers whole numbers hain
+                if df[col].dropna().apply(lambda x: float(x).is_integer()).all():
+                    # Convert Int64 (Null safe integer) then to string
                     df[col] = df[col].astype('Int64').astype(str).replace('<NA>', '')
+                    
         return df
-    except: 
-        return pd.DataFrame({"Alert": ["Error loading sheet"]})
+    except Exception: 
+        return pd.DataFrame({"Alert": ["Error loading sheet. Check link permissions."]})
 
 def render_smart_table(df, title):
     search = st.text_input(f"🔍 Search in {title}:", "")
-    display_df = df[df.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)] if search else df
+    
+    # Secure string search
+    if search:
+        mask = df.astype(str).apply(lambda x: x.str.contains(search, case=False, na=False)).any(axis=1)
+        display_df = df[mask]
+    else:
+        display_df = df
     
     # 🎨 Color Coding Engine
     def color_coding(val):
@@ -76,16 +98,10 @@ def render_smart_table(df, title):
     # Apply text styles
     styled_df = display_df.style.map(color_coding) if hasattr(display_df.style, 'map') else display_df.style.applymap(color_coding)
     
-    # 🎯 FIX: Black Header with White Font
-    styled_df = styled_df.set_table_styles([
-        {'selector': 'th.col_heading', 'props': [('background-color', 'black !important'), ('color', 'white !important'), ('font-weight', 'bold !important')]},
-        {'selector': 'th.row_heading', 'props': [('background-color', 'black !important'), ('color', 'white !important')]}
-    ])
-    
     st.dataframe(styled_df, use_container_width=True)
 
 # ==========================================
-# 4. PAGES & NAVIGATION
+# 4. DASHBOARD NAVIGATION
 # ==========================================
 def main():
     if not check_login(): return
@@ -102,7 +118,14 @@ def main():
         with col2: st.markdown("<div class='card'><h3>🤝 Outsource Staff</h3></div>", unsafe_allow_html=True)
         with col3: st.markdown("<div class='card'><h3>🏥 Ward Attendants</h3></div>", unsafe_allow_html=True)
     else:
-        sheet_map = {"1️⃣ Regular Staff": "Sheet1", "2️⃣ Outsource Staff": "Sheet2", "3️⃣ Regular Staff Detail": "Sheet3", "4️⃣ Outsource Staff Detail": "Sheet4", "5️⃣ Deputation Staff": "Sheet5", "6️⃣ CH Ward Attendant": "Sheet6"}
+        sheet_map = {
+            "1️⃣ Regular Staff": "Sheet1", 
+            "2️⃣ Outsource Staff": "Sheet2", 
+            "3️⃣ Regular Staff Detail": "Sheet3", 
+            "4️⃣ Outsource Staff Detail": "Sheet4", 
+            "5️⃣ Deputation Staff": "Sheet5", 
+            "6️⃣ CH Ward Attendant": "Sheet6"
+        }
         render_smart_table(load_data_from_sheet(sheet_map[page]), page)
 
 if __name__ == "__main__":
