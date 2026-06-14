@@ -65,14 +65,14 @@ def load_data_from_sheet(sheet_name):
     try:
         df = pd.read_csv(csv_url)
         
-        # 🎯 EXPERT FIX: Triple Filter for Blank Rows & Columns
-        df = df.dropna(axis=0, how="all") # Filter 1: Saari khali rows hatayein
-        df = df.dropna(axis=1, how="all") # Filter 2: Saare khali columns hatayein
-        df = df.loc[:, ~df.columns.str.contains('^Unnamed')] # Filter 3: Faltu "Unnamed" columns hatayein
+        # Triple Filter for Blank Rows & Columns
+        df = df.dropna(axis=0, how="all") 
+        df = df.dropna(axis=1, how="all") 
+        df = df.loc[:, ~df.columns.str.contains('^Unnamed')] 
         
         df = df.reset_index(drop=True)
         
-        # Safe Float/Decimal removal (Handles empty cells and large numbers safely)
+        # Safe Float/Decimal removal 
         for col in df.columns:
             if pd.api.types.is_numeric_dtype(df[col]):
                 if df[col].dropna().apply(lambda x: float(x).is_integer()).all():
@@ -80,7 +80,7 @@ def load_data_from_sheet(sheet_name):
                     
         return df
     except Exception: 
-        return pd.DataFrame({"Alert": ["Error loading sheet. Check link permissions."]})
+        return pd.DataFrame({"Alert": [f"Error loading {sheet_name}. Check link permissions."]})
 
 def render_smart_table(df, title):
     search = st.text_input(f"🔍 Search in {title}:", "")
@@ -111,7 +111,21 @@ def main():
     st.button("🚪 Logout", on_click=lambda: st.session_state.update({"logged_in": False}))
     st.markdown("<div class='main-header'>🏢 Civil Hospital HR Dashboard</div>", unsafe_allow_html=True)
     
-    page = st.radio("", ["🏠 Home", "1️⃣ Regular Staff", "2️⃣ Outsource Staff", "3️⃣ Regular Staff Detail", "4️⃣ Outsource Staff Detail", "5️⃣ Deputation Staff", "6️⃣ CH Ward Attendant"], horizontal=True)
+    # 🎯 EXPERT FIX: Added 7th Page in Navigation
+    page = st.radio(
+        "", 
+        [
+            "🏠 Home", 
+            "1️⃣ Regular Staff", 
+            "2️⃣ Outsource Staff", 
+            "3️⃣ Regular Staff Detail", 
+            "4️⃣ Outsource Staff Detail", 
+            "5️⃣ Deputation Staff", 
+            "6️⃣ CH Ward Attendant",
+            "7️⃣ MO Posting Position"
+        ], 
+        horizontal=True
+    )
     st.divider()
 
     if page == "🏠 Home":
@@ -120,13 +134,15 @@ def main():
         with col2: st.markdown("<div class='card'><h3>🤝 Outsource Staff</h3></div>", unsafe_allow_html=True)
         with col3: st.markdown("<div class='card'><h3>🏥 Ward Attendants</h3></div>", unsafe_allow_html=True)
     else:
+        # 🎯 EXPERT FIX: Mapped 7th Page to Sheet7
         sheet_map = {
             "1️⃣ Regular Staff": "Sheet1", 
             "2️⃣ Outsource Staff": "Sheet2", 
             "3️⃣ Regular Staff Detail": "Sheet3", 
             "4️⃣ Outsource Staff Detail": "Sheet4", 
             "5️⃣ Deputation Staff": "Sheet5", 
-            "6️⃣ CH Ward Attendant": "Sheet6"
+            "6️⃣ CH Ward Attendant": "Sheet6",
+            "7️⃣ MO Posting Position": "Sheet7"
         }
         render_smart_table(load_data_from_sheet(sheet_map[page]), page)
 
