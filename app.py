@@ -10,13 +10,10 @@ st.set_page_config(page_title="HR Portal | Civil Hospital Bathinda", page_icon="
 st.markdown("""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;800&display=swap');
-        
         html, body, [class*="css"]  { font-family: 'Poppins', sans-serif !important; }
         #MainMenu, footer, header {visibility: hidden !important;}
         [data-testid="stToolbar"], [data-testid="stElementToolbar"] {visibility: hidden !important; display: none !important;}
-        
         * { -webkit-user-select: none !important; user-select: none !important; }
-        
         .block-container { padding-top: 1rem !important; max-width: 95% !important; }
         
         div.row-widget.stRadio > div {
@@ -25,14 +22,12 @@ st.markdown("""
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2);
             gap: 5px; justify-content: center; margin-bottom: 20px;
         }
-        
         div.row-widget.stRadio > div > label {
             background: rgba(255, 255, 255, 0.05); color: #f8fafc !important;
             border-radius: 30px; padding: 10px 20px;
             transition: all 0.3s ease-in-out; cursor: pointer;
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
-        
         div.row-widget.stRadio > div > label:hover {
             background: #3b82f6 !important; transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); border-color: #3b82f6;
@@ -47,7 +42,6 @@ st.markdown("""
         .hero-title { font-size: 4rem; font-weight: 800; letter-spacing: -1.5px; margin-bottom: 10px; line-height: 1.1; }
         .hero-subtitle { font-size: 1.2rem; font-weight: 300; opacity: 0.9; margin-bottom: 30px;}
         .system-badge { background: rgba(255,255,255,0.2); padding: 8px 16px; border-radius: 50px; font-size: 0.9rem; font-weight: 600; text-transform: uppercase;}
-        
         @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 """, unsafe_allow_html=True)
@@ -64,7 +58,7 @@ def check_login():
     with col2:
         st.markdown("""
             <div style='text-align:center; margin-bottom: 20px;'>
-                <h1 style='color: #1e293b; font-weight: 800;'>🔐 HR Portal Portal</h1>
+                <h1 style='color: #1e293b; font-weight: 800;'>🔐 HR Portal</h1>
                 <p style='color: #64748b;'>Enter credentials to access the establishment records</p>
             </div>
         """, unsafe_allow_html=True)
@@ -96,7 +90,6 @@ def load_data_from_sheet(sheet_name):
         df = df.dropna(axis=0, how="all").dropna(axis=1, how="all")
         df = df.loc[:, ~df.columns.str.contains('^Unnamed')].reset_index(drop=True)
         
-        # 🎯 EXPERT FIX: Safer String conversion to prevent <NA> artifacts
         for col in df.columns:
             if pd.api.types.is_numeric_dtype(df[col]):
                 if df[col].dropna().apply(lambda x: float(x).is_integer()).all():
@@ -126,8 +119,8 @@ def render_smart_table(df, title):
     
     styled_df = display_df.style.map(color_coding) if hasattr(display_df.style, 'map') else display_df.style.applymap(color_coding)
     
-    # 🎯 EXPERT FIX: hide_index=True for a cleaner corporate look
-    st.dataframe(styled_df, use_container_width=True, height=600, hide_index=True)
+    # 🎯 EXPERT FIX: Removed hide_index=True which causes crashes with Pandas Styler
+    st.dataframe(styled_df, use_container_width=True, height=600)
 
 # ==========================================
 # 4. DASHBOARD ROUTER & UI
@@ -135,11 +128,10 @@ def render_smart_table(df, title):
 def main():
     if not check_login(): return
 
-    # 🎯 EXPERT FIX: Top Bar with Refresh Button & Logout
     col_empty, col_refresh, col_btn = st.columns([8, 1, 1])
     with col_refresh:
         if st.button("🔄 Refresh", use_container_width=True):
-            st.cache_data.clear() # Clears cache to fetch live data instantly
+            st.cache_data.clear() 
     with col_btn:
         st.button("Log Out 🚪", on_click=lambda: st.session_state.update({"logged_in": False}), use_container_width=True)
     
@@ -157,7 +149,6 @@ def main():
                 <p class='hero-subtitle'>Centralized Human Resource & Establishment Management System</p>
             </div>
         """, unsafe_allow_html=True)
-        
     else:
         sheet_map = {
             "1️⃣ Regular": ("Sheet1", "🩺 Regular Staff Management"), 
@@ -168,7 +159,6 @@ def main():
             "6️⃣ Ward Attendant": ("Sheet6", "🏥 Ward Attendant List"),
             "7️⃣ MO Posting": ("Sheet7", "👨‍⚕️ MO Posting Positions")
         }
-        
         target_sheet, display_title = sheet_map[page]
         render_smart_table(load_data_from_sheet(target_sheet), display_title)
 
